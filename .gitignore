@@ -1,0 +1,8 @@
+data/h/
+data/n/
+data/quotes.json
+data/meta.json
+data/*.tmp
+shots/
+isy.html
+__pycache__/

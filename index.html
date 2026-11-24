@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sammekBTM · Borsa Takip Merkezi</title>
+<meta name="description" content="sammekBTM – Borsa İstanbul (BIST) tüm hisseler, en çok işlem görenler, yükselenler, kırılım radarı ve haberler.">
+<link rel="icon" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="sticky">
+<header class="top">
+  <a class="brand" href="#/">
+    <img id="logo" src="assets/logo.png" alt="SAMMEKBTM" onerror="this.remove();document.getElementById('wordmark').hidden=false">
+    <span id="wordmark" class="wordmark" hidden>SAMMEKBTM</span>
+    <span class="sub">BORSA TAKİP MERKEZİ</span>
+  </a>
+  <div class="status">
+    <div><span id="mkt" class="mkt">—</span> <span id="clock" class="mono"></span></div>
+    <div class="small">Son veri: <span id="upd" class="mono">—</span> · <span id="next" class="mono"></span></div>
+  </div>
+</header>
+
+<div class="tape"><div id="tape" class="tape-inner"></div></div>
+</div>
+
+<main id="home">
+  <section id="idx" class="idx"></section>
+  <section class="breadth" id="breadth"></section>
+
+  <section class="boards">
+    <div class="board"><h2>EN ÇOK İŞLEM GÖRENLER <small>TL hacim</small></h2><table id="b-vol"></table></div>
+    <div class="board"><h2>EN ÇOK ALINANLAR <small>yükselen + hacim temposu yüksek</small></h2><table id="b-buy"></table></div>
+    <div class="board"><h2>EN ÇOK YÜKSELENLER</h2><table id="b-up"></table></div>
+    <div class="board"><h2>EN ÇOK DÜŞENLER</h2><table id="b-down"></table></div>
+    <div class="board wide"><h2>KIRILIM RADARI <small>zirve/dip kırılımları, ortalama kesişimleri, hacim patlamaları</small></h2><table id="b-brk"></table></div>
+  </section>
+
+  <section class="all">
+    <div class="allhead">
+      <h2>TÜM BIST HİSSELERİ <small id="cnt"></small></h2>
+      <div class="filters">
+        <input id="q" placeholder="Hisse kodu veya şirket ara… (örn. THYAO)" autocomplete="off">
+        <select id="sector"><option value="">Tüm sektörler</option></select>
+        <select id="dir"><option value="">Hepsi</option><option value="up">Yükselenler</option><option value="down">Düşenler</option><option value="brk">Kırılım var</option></select>
+      </div>
+    </div>
+    <div class="tablewrap">
+    <table id="list" class="list">
+      <thead><tr>
+        <th data-k="code">Kod</th><th data-k="n" class="hide-s">Şirket</th><th data-k="s" class="hide-m">Sektör</th>
+        <th data-k="p" class="r">Son</th><th data-k="c" class="r hide-s">Fark</th><th data-k="cp" class="r">%</th>
+        <th data-k="l" class="r hide-m">Düşük</th><th data-k="h" class="r hide-m">Yüksek</th>
+        <th data-k="v" class="r hide-m">Hacim (lot)</th><th data-k="tv" class="r">Hacim (TL)</th><th data-k="mc" class="r hide-m">Piy. Değ.</th>
+        <th data-k="sc" class="r hide-s">Sinyal</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </section>
+</main>
+
+<div id="detail" class="detail" hidden>
+  <div class="dwrap">
+    <button class="close" id="close" title="Kapat">✕</button>
+    <div id="dbody"></div>
+  </div>
+</div>
+
+<footer>
+  <p><b>sammekBTM</b> · Fiyatlar Yahoo Finance, haberler Google Haberler kaynaklıdır. Fiyatlar borsadan <b>~15 dk gecikmeli</b> gelir ve site yaklaşık her 5–10 dakikada bir otomatik güncellenir; ekran her 30 sn'de yeni veriyi kontrol eder.
+  Hisse listesi: İş Yatırım. Özet/Potansiyel bölümleri gerçek fiyat verisi ve haber başlıklarından kurallarla otomatik üretilir. <b>Yatırım tavsiyesi değildir.</b></p>
+</footer>
+<script src="app.js?v=1"></script>
+</body>
+</html>
