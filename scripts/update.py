@@ -88,6 +88,55 @@ def fetch_hist(codes):
             if h: out[c] = h
     return out
 
+# ---------------- intraday ----------------
+def fetch_intraday(codes, interval="5m"):
+    def one(c):
+        sym = c if ("=" in c or c.startswith("^")) else c + ".IS"
+        r = get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}", {"range": "1d", "interval": interval})
+        if not r: return c, None
+        try:
+            res = r.json()["chart"]["result"][0]
+            m = res["meta"]; ts = res.get("timestamp") or []; q = res["indicators"]["quote"][0]
+            bars = [[t, r2(o), r2(h), r2(l), r2(cl), v or 0] for t, o, h, l, cl, v in
+                    zip(ts, q["open"], q["high"], q["low"], q["close"], q["volume"]) if cl is not None and o is not None]
+            per = m.get("currentTradingPeriod", {}).get("regular", {})
+            return c, {"iv": interval, "pc": r2(m.get("chartPreviousClose") or m.get("previousClose")), "s": per.get("start"), "e": per.get("end"), "b": bars}
+        except Exception:
+            return c, None
+    out = {}
+    with ThreadPoolExecutor(8) as ex:
+        for c, d in ex.map(one, codes):
+            if d: out[c] = d
+    return out
+
+# ---------------- reasons (neden yükseldi / düştü) ----------------
+def reasons(code, name, items, all_codes):
+    """Hissenin bugünkü hareketi için en ilgili GERÇEK haber başlığını seç. Uydurma yok: bulunamazsa None."""
+    now = time.time(); today = dt.datetime.now(TR).date()
+    words = [w for w in re.split(r"[\s.,()]+", name.lower()) if len(w) >= 4][:2]
+    best = {"up": None, "down": None}
+    JUNK = ("devre kesici", "canlı grafik", "hisse senedi$", "sorumluluk beyanı", "tradingview", " için ", "fiyatı ne kadar", "kaç tl",
+            "hisse yorum", "teknik analiz", "özel durum açıklaması (genel)")
+    for it in items or []:
+        t = it["t"]; tl = t.lower(); age = now - (it.get("d") or 0)
+        if any((re.search(j, tl) if j.endswith("$") else j in tl) for j in JUNK) or (it.get("s") or "").lower() == "tradingview": continue
+        if age > 3 * 86400: continue
+        spec = (2 if re.search(r"\b" + code + r"\b", t) else 0) + (1 if any(w in tl for w in words) else 0)
+        if spec == 0: continue
+        others = sum(1 for tok in set(re.findall(r"\b[A-ZÇĞİÖŞÜ0-9]{4,6}\b", t)) if tok != code and tok in all_codes)
+        if others >= 3: spec -= 2          # liste haberi ("en çok yükselen 10 hisse") daha az özgül
+        d = dt.datetime.fromtimestamp(it.get("d") or 0, TR).date()
+        rec = 2 if d == today else 1 if (today - d).days == 1 else 0
+        x = it.get("x", 0)
+        for dirn, sign in (("up", 1), ("down", -1)):
+            if x * sign < 0: continue      # zıt yönlü haber asla sebep gösterilmez
+            sc = spec + rec + (2 if x * sign > 0 else 0)
+            if x == 0 and rec < 2: continue  # nötr başlık sadece bugünkü ise
+            if sc >= 4 and (best[dirn] is None or sc > best[dirn][0] or (sc == best[dirn][0] and it["d"] > best[dirn][1]["d"])):
+                best[dirn] = (sc, it)
+    out = {k: {"t": v[1]["t"], "s": v[1]["s"], "u": v[1]["u"], "d": v[1]["d"], "k": "x" if v[1].get("x") else "n"} for k, v in best.items() if v}
+    return out or None
+
 # ---------------- signals (kırılımlar) ----------------
 def sma(a, n): return sum(a[-n:]) / n if len(a) >= n else None
 
@@ -156,20 +205,27 @@ def signals(code, q, h):
             "c5": r2(chg(5), 2), "c20": r2(chg(20), 2), "c60": r2(chg(60), 2)}
 
 # ---------------- news ----------------
-POS = ["rekor", "yüksel", "artış", "arttı", "kâr", "kar açıkladı", "temettü", "bedelsiz", "geri alım", "hedef fiyat yükselt",
-       "al tavsiye", "anlaşma", "ihale kazan", "sipariş", "yatırım", "büyüme", "zirve", "pozitif", "güçlü", "ralli", "sözleşme", "onay", "ihracat"]
-NEG = ["düş", "geriledi", "zarar", "ceza", "soruşturma", "iflas", "konkordato", "sat tavsiye", "hedef fiyat düşür", "kayıp",
-       "negatif", "zayıf", "dava", "tedbir", "kapanış altı", "çakıldı", "sert satış", "devre kesici", "borç", "uyarı"]
+POS = ["rekor", "yüksel", "artış", "arttı", "kâr", "kar açıkla", "net kar", "temettü", "bedelsiz", "geri alım", "hedef fiyat", "yükseltti",
+       "al tavsiye", "anlaşma", "ihale", "kazandı", "sipariş", "yatırım", "büyüme", "zirve", "pozitif", "güçlü", "ralli", "sözleşme",
+       "onay", "onaylandı", "ihracat", "imzaladı", "imzalandı", "satın al", "ortaklık", "teşvik", "tavan", "fırladı", "uçtu", "patladı",
+       "prim yaptı", "kapasite", "lisans", "halka arz", "ödül", "endekse dahil", "en çok yükselen"]
+NEG = ["düş", "geriledi", "zarar", "ceza", "soruşturma", "iflas", "konkordato", "sat tavsiye", "düşürdü", "kayıp", "negatif", "zayıf",
+       "dava", "tedbir", "çakıldı", "sert satış", "borç", "uyarı", "reddedildi", "ret", "iptal", "geri çekil", "taban",
+       "eriydi", "değer kaybı", "sert düş", "gözaltı", "haciz", "durduruldu", "kesinti", "küçüldü", "endeksten çıkar", "en çok düşen", "satış baskısı"]
 def senti(t):
     s = t.lower()
     return sum(1 for w in POS if w in s) - sum(1 for w in NEG if w in s)
 
-def fetch_news(codes, names):
+def fetch_news(codes, names, by_name=()):
     def one(c):
         q = f'"{c}" (hisse OR borsa OR BIST) when:30d'
         r = get("https://news.google.com/rss/search", {"q": q, "hl": "tr", "gl": "TR", "ceid": "TR:tr"}, tries=2)
         items = []
-        if r:
+        rs = [r]
+        if c in by_name and names.get(c):
+            rs.append(get("https://news.google.com/rss/search", {"q": f'"{names[c]["n"]}" when:3d', "hl": "tr", "gl": "TR", "ceid": "TR:tr"}, tries=1))
+        for r in rs:
+          if r:
             try:
                 root = ET.fromstring(r.content)
                 for it in root.iter("item"):
@@ -178,15 +234,17 @@ def fetch_news(codes, names):
                     if src and title.endswith(" - " + src): title = title[: -len(src) - 3]
                     try: ts = int(email.utils.parsedate_to_datetime(it.findtext("pubDate")).timestamp())
                     except Exception: ts = 0
+                    if any(x["t"] == title for x in items): continue
                     items.append({"t": title, "s": src, "u": it.findtext("link"), "d": ts, "x": senti(title)})
             except Exception:
                 pass
         items.sort(key=lambda x: -x["d"])
-        return c, items[:10], r is not None
+        return c, items[:12], rs[0] is not None
     out = {}; ok = 0
     with ThreadPoolExecutor(4) as ex:
         for c, items, good in ex.map(one, codes):
-            out[c] = items; ok += good
+            if good: out[c] = items
+            ok += good
     return out, ok
 
 # ---------------- main ----------------
@@ -233,15 +291,33 @@ def main():
     for c in q: q[c]["tv"] = round((q[c]["p"] or 0) * (q[c]["v"] or 0))
     idx = fetch_quotes(["XU100", "XU030", "XBANK", "USDTRY=X", "EURTRY=X", "GC=F"])
     mt = max([x.get("t") or 0 for x in q.values()] or [0])
-    save("quotes.json", {"u": int(now), "mt": mt, "q": q, "sig": sig, "idx": idx})
 
-    if "news" in force or now - meta.get("news_at", 0) > 55 * 60:
-        t0 = time.time(); news, ok = fetch_news(codes, tick)
-        if ok > len(codes) * 0.5:
-            os.makedirs(os.path.join(D, "n"), exist_ok=True)
-            for c, items in news.items(): save(f"n/{c}.json", {"u": int(now), "n": items[:8]})
-            meta["news_at"] = int(now)
-        print(f"news: {ok}/{len(codes)} istek ok, {sum(len(v) for v in news.values())} haber, {time.time()-t0:.0f}s")
+    # gün içi 5 dk mumlar (her çalışmada)
+    t0 = time.time(); intr = fetch_intraday(codes); intr.update(fetch_intraday(["XU100"], "2m"))
+    os.makedirs(os.path.join(D, "i"), exist_ok=True)
+    for c, d in intr.items(): save(f"i/{c}.json", d)
+    print(f"intraday: {len(intr)} hisse, {time.time()-t0:.0f}s")
+
+    # haberler: tümü saatte bir, bugün sert hareket edenler 15 dk'da bir
+    full = "news" in force or now - meta.get("news_at", 0) > 55 * 60
+    movers = [c for c in codes if c in q and abs(q[c].get("cp") or 0) >= 2]
+    todo = codes if full else [c for c in movers if now - (load(f"n/{c}.json", {}) or {}).get("u", 0) > 14 * 60]
+    if todo:
+        t0 = time.time(); news, ok = fetch_news(todo, tick, by_name=set(movers))
+        os.makedirs(os.path.join(D, "n"), exist_ok=True)
+        if not full or ok > len(codes) * 0.5:
+            for c, items in news.items(): save(f"n/{c}.json", {"u": int(now), "n": items[:12]})
+            if full: meta["news_at"] = int(now)
+        print(f"news ({'tam' if full else 'hareketliler'}): {ok}/{len(todo)} istek ok, {time.time()-t0:.0f}s")
+
+    why = {}
+    cset = set(codes)
+    for c in codes:
+        n = load(f"n/{c}.json", {}) or {}
+        r = reasons(c, tick[c]["n"], n.get("n"), cset)
+        if r: why[c] = r
+    print(f"sebep satırı bulunan hisse: {len(why)}")
+    save("quotes.json", {"u": int(now), "mt": mt, "q": q, "sig": sig, "idx": idx, "why": why})
     save("meta.json", meta)
 
 if __name__ == "__main__":

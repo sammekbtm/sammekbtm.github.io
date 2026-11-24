@@ -1,6 +1,8 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const TICK = {}; let Q = {}, SIG = {}, IDX = {}, META = {u: 0, mt: 0};
+const TICK = {}; let Q = {}, SIG = {}, IDX = {}, WHY = {}, META = {u: 0, mt: 0}, LIVE_AT = 0;
+const LIVE = {}; // canlı akıştan gelen fiyat örnekleri: kod -> [[t, p, v]]
+const XI = {data: null};
 let sortK = "tv", sortAsc = false, lastU = 0, nextAt = 0;
 const POLL = 30000;
 
@@ -33,21 +35,24 @@ function rows() {
   return Object.keys(TICK).filter(c => Q[c]).map(c => ({code: c, n: TICK[c].n, s: TICK[c].s, mc: TICK[c].mc, ...Q[c], sc: SIG[c]?.sc ?? 0, sig: SIG[c]}));
 }
 
-function rowMini(r, extra) {
-  return `<tr data-c="${r.code}"><td class="code">${r.code}</td><td class="name">${esc(r.n)}</td><td class="r" data-f="p">${fp(r.p)}</td>
-  <td class="r"><span class="pill ${cls(r.cp)}" data-f="cp">${fpct(r.cp)}</span></td>${extra ? `<td class="r">${extra}</td>` : ""}</tr>`;
+function whyOf(code, cp) { const w = WHY[code]; if (!w || cp == null || Math.abs(cp) < 1) return null; return w[cp > 0 ? "up" : "down"] || null; }
+function rowMini(r, extra, withWhy) {
+  const w = withWhy ? whyOf(r.code, r.cp) : null;
+  const wr = withWhy && Math.abs(r.cp) >= 1 ? `<tr class="wr" data-c="${r.code}"><td colspan="5">${w ? `<span class="${r.cp > 0 ? "up" : "down"}">${r.cp > 0 ? "Yükseliş" : "Düşüş"} sebebi:</span> ${esc(w.t)}` : "Belirgin bir haber bulunamadı"}</td></tr>` : "";
+  return `<tr data-c="${r.code}" class="${wr ? "hasr" : ""}" title="${w ? esc(w.t) + " — " + esc(w.s) : ""}"><td class="code">${r.code}</td><td class="name">${esc(r.n)}</td><td class="r" data-f="p">${fp(r.p)}</td>
+  <td class="r"><span class="pill ${cls(r.cp)}" data-f="cp">${fpct(r.cp)}</span></td>${extra ? `<td class="r">${extra}</td>` : ""}</tr>${wr}`;
 }
 
 function renderBoards() {
   const R = rows();
   const byVol = [...R].sort((a, b) => b.tv - a.tv).slice(0, 10);
-  $("#b-vol").innerHTML = byVol.map(r => rowMini(r, big(r.tv) + " ₺")).join("");
+  $("#b-vol").innerHTML = byVol.map(r => rowMini(r, big(r.tv) + " ₺", true)).join("");
   const buy = R.filter(r => r.cp > 0 && r.sig?.vr && r.tv > 5e6).map(r => ({...r, bs: Math.log10(1 + r.tv) * Math.min(r.sig.vr, 6) * Math.min(r.cp, 10)}))
     .sort((a, b) => b.bs - a.bs).slice(0, 10);
   $("#b-buy").innerHTML = buy.map(r => rowMini(r, "×" + F1.format(r.sig.vr))).join("");
   const liquid = R.filter(r => r.tv > 1e6);
-  $("#b-up").innerHTML = [...liquid].sort((a, b) => b.cp - a.cp).slice(0, 10).map(r => rowMini(r, big(r.tv) + " ₺")).join("");
-  $("#b-down").innerHTML = [...liquid].sort((a, b) => a.cp - b.cp).slice(0, 10).map(r => rowMini(r, big(r.tv) + " ₺")).join("");
+  $("#b-up").innerHTML = [...liquid].sort((a, b) => b.cp - a.cp).slice(0, 10).map(r => rowMini(r, big(r.tv) + " ₺", true)).join("");
+  $("#b-down").innerHTML = [...liquid].sort((a, b) => a.cp - b.cp).slice(0, 10).map(r => rowMini(r, big(r.tv) + " ₺", true)).join("");
   const brk = R.filter(r => r.sig && r.sig.f.some(f => f[0] === "up" || f[0] === "down"))
     .sort((a, b) => Math.abs(b.sc) * Math.log10(10 + b.tv) - Math.abs(a.sc) * Math.log10(10 + a.tv)).slice(0, 12);
   $("#b-brk").className = "brklist";
@@ -94,23 +99,53 @@ function flash() {
     const k = n.p > o.p ? "fl-up" : "fl-down"; tr.querySelectorAll('[data-f="p"],[data-f="cp"]').forEach(td => { td.classList.remove("fl-up", "fl-down"); void td.offsetWidth; td.classList.add(k); }); });
 }
 
-function renderAll() { renderIdx(); renderBoards(); renderTape(); renderList(); flash(); }
+function renderAll() { renderIdx(); renderBoards(); renderTape(); renderList(); flash(); drawXU(); }
 
 async function poll() {
   try {
     const d = await getJSON("data/quotes.json");
     if (d.u !== lastU) {
-      prevQ = Q; Q = d.q; SIG = d.sig || {}; IDX = d.idx || {}; META = d; lastU = d.u;
-      $("#upd").textContent = trTime(d.mt) + " (borsa) · güncellendi " + trTime(d.u);
+      prevQ = snapshot(); const keep = LIVE_AT && Date.now() - LIVE_AT < 120000 ? Q : null;
+      Q = d.q; if (keep) for (const c in keep) if (Q[c] && keep[c].lt) Object.assign(Q[c], pick(keep[c]));
+      SIG = d.sig || {}; WHY = d.why || {}; const kI = IDX; IDX = d.idx || {}; if (keep) for (const k of ["XU100", "XU030", "XBANK"]) if (kI[k]?.lt && IDX[k]) Object.assign(IDX[k], pick(kI[k])); META = d; lastU = d.u;
+      loadXU();
+      updLabel();
       renderAll();
       if (openCode) renderDetailHead(openCode, true);
     }
   } catch (e) { console.warn(e); }
-  nextAt = Date.now() + POLL; setTimeout(poll, POLL);
+  setTimeout(poll, 60000);
+}
+const pick = o => ({p: o.p, c: o.c, cp: o.cp, v: o.v, h: o.h, l: o.l, tv: o.tv, lt: o.lt});
+const snapshot = () => { const o = {}; for (const c in Q) o[c] = {p: Q[c].p}; return o; };
+function updLabel() {
+  const live = LIVE_AT && Date.now() - LIVE_AT < 90000;
+  $("#upd").textContent = live ? "canlı akış " + new Date(LIVE_AT).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul"}) + " (~15 dk gecikmeli)" : trTime(META.mt) + " (borsa) · güncellendi " + trTime(META.u);
+}
+
+/* ---- canlı akış: TradingView tarayıcı tarama servisi (CORS açık, BIST ~15 dk gecikmeli) ---- */
+const TV_URL = "https://scanner.tradingview.com/turkey/scan";
+const TV_COLS = ["name", "close", "change", "change_abs", "volume", "high", "low", "Value.Traded"];
+const LIVE_POLL = 15000;
+async function livePoll() {
+  try {
+    const body = JSON.stringify({columns: TV_COLS, filter: [{left: "type", operation: "equal", right: "stock"}], range: [0, 2000]});
+    const [a, b] = await Promise.all([
+      fetch(TV_URL, {method: "POST", body, headers: {"Content-Type": "text/plain"}}).then(r => r.json()),
+      fetch(TV_URL, {method: "POST", body: JSON.stringify({columns: TV_COLS, symbols: {tickers: ["BIST:XU100", "BIST:XU030", "BIST:XBANK"]}}), headers: {"Content-Type": "text/plain"}}).then(r => r.json())]);
+    if (!a?.data?.length) throw new Error("boş");
+    prevQ = snapshot(); const t = Math.floor(Date.now() / 1000) - 900; let n = 0;
+    const apply = (o, d) => { const [, p, cp, c, v, h, l, tv] = d; if (p == null) return false;
+      o.p = p; o.cp = cp; o.c = c; o.v = v; o.h = h; o.l = l; if (tv != null) o.tv = Math.round(tv); o.lt = t; return true; };
+    for (const it of a.data) { const code = it.d[0]; if (!Q[code]) continue; if (apply(Q[code], it.d)) { n++; (LIVE[code] = LIVE[code] || []).push([t, it.d[1], it.d[4]]); if (LIVE[code].length > 3000) LIVE[code].shift(); } }
+    for (const it of b?.data || []) { const k = it.d[0]; if (!IDX[k]) IDX[k] = {}; apply(IDX[k], it.d); (LIVE[k] = LIVE[k] || []).push([t, it.d[1], it.d[4]]); }
+    if (n > 100) { LIVE_AT = Date.now(); updLabel(); renderAll(); if (openCode) renderDetailHead(openCode, true); }
+  } catch (e) { console.warn("canlı akış alınamadı, dosya verisi kullanılıyor", e); }
+  nextAt = Date.now() + LIVE_POLL; setTimeout(livePoll, LIVE_POLL);
 }
 
 /* ---------------- detail ---------------- */
-let openCode = null, H = null, NEWS = null, rng = 120;
+let openCode = null, H = null, NEWS = null, INTRA = null, rng = 0;
 function route() {
   const m = location.hash.match(/^#\/([A-Z0-9]{2,8})$/);
   if (m && TICK[m[1]]) openDetail(m[1]); else closeDetail(true);
@@ -118,11 +153,12 @@ function route() {
 function closeDetail(fromRoute) { openCode = null; $("#detail").hidden = true; document.body.style.overflow = ""; if (!fromRoute && location.hash) history.pushState("", "", location.pathname); }
 async function openDetail(c) {
   openCode = c; H = null; NEWS = null; $("#detail").hidden = false; document.body.style.overflow = "hidden";
-  $("#dbody").innerHTML = `<div id="dhead"></div><div id="dchart" class="chartbox"><div class="loading">Grafik yükleniyor…</div></div><div id="dozet"></div><div id="dnews" class="news"></div>`;
+  rng = 0; INTRA = null;
+  $("#dbody").innerHTML = `<div id="dhead"></div><div id="dwhy"></div><div id="dchart" class="chartbox"><div class="loading">Grafik yükleniyor…</div></div><div id="dorders"></div><div id="dozet"></div><div id="dnews" class="news"></div>`;
   renderDetailHead(c);
-  const [h, n] = await Promise.all([getJSON(`data/h/${c}.json`).catch(() => null), getJSON(`data/n/${c}.json`).catch(() => null)]);
-  if (openCode !== c) return; H = h; NEWS = n ? n.n : [];
-  renderChart(); renderOzet(); renderNews();
+  const [h, n, i] = await Promise.all([getJSON(`data/h/${c}.json`).catch(() => null), getJSON(`data/n/${c}.json`).catch(() => null), getJSON(`data/i/${c}.json`).catch(() => null)]);
+  if (openCode !== c) return; H = h; NEWS = n ? n.n : []; INTRA = i;
+  renderWhy(); renderChart(); renderOrders(); renderOzet(); renderNews();
 }
 function renderDetailHead(c, live) {
   const t = TICK[c], q = Q[c] || {}, s = SIG[c] || {};
@@ -139,7 +175,7 @@ function renderDetailHead(c, live) {
       <div><span>20 GÜN</span><b class="${cls(s.c20)}">${fpct(s.c20)}</b></div><div><span>60 GÜN</span><b class="${cls(s.c60)}">${fpct(s.c60)}</b></div>
     </div>`;
   if (live && prev && +prev !== q.p) { const el = $("#dhead .px"); el.classList.add(q.p > prev ? "fl-up" : "fl-down"); }
-  if (live && H) { renderChart(); renderOzet(); }
+  if (live && H) { renderWhy(); renderChart(true); renderOrders(); renderOzet(); }
 }
 function series() {
   const q = Q[openCode]; let t = H.t.slice(), c = H.c.slice();
@@ -150,7 +186,8 @@ function series() {
   return {t, c};
 }
 function ma(arr, n) { return arr.map((_, i) => i < n - 1 ? null : arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n); }
-function renderChart() {
+function renderChart(live) {
+  if (rng === 0) return renderIntraChart(live);
   if (!H || !H.c?.length) { $("#dchart").innerHTML = `<div class="loading">Grafik verisi yok.</div>`; return; }
   const S = series(), m20 = ma(S.c, 20), m50 = ma(S.c, 50);
   const n = Math.min(rng, S.c.length), off = S.c.length - n;
@@ -171,7 +208,7 @@ function renderChart() {
     <path d="${path(c)}" fill="none" stroke="${col}" stroke-width="2"/>
     <line x1="${pl}" x2="${W - pr}" y1="${Y(last)}" y2="${Y(last)}" stroke="${col}" stroke-dasharray="3 3" opacity=".6"/>
     <rect x="${W - pr + 2}" y="${Y(last) - 9}" width="${pr - 4}" height="18" fill="${col}"/><text x="${W - pr + 6}" y="${Y(last) + 4}" style="fill:#000;font-weight:700">${fp(last)}</text></svg>`;
-  $("#dchart").innerHTML = `<div class="rng">${[[22, "1A"], [66, "3A"], [130, "6A"], [260, "1Y"]].map(([v, l]) => `<button data-r="${v}" class="${v === rng || (rng === 120 && v === 130) ? "on" : ""}">${l}</button>`).join("")}
+  $("#dchart").innerHTML = `<div class="rng">${rngBtns()}
     <span class="leg"><i style="background:${col}"></i>Fiyat<i style="background:#f5b301"></i>Ort.20<i style="background:#2f81f7"></i>Ort.50 · günlük kapanış</span></div>${svg}`;
 }
 function newsStats() {
@@ -208,7 +245,7 @@ function renderNews() {
 
 /* ---------------- init ---------------- */
 document.addEventListener("click", e => {
-  const r = e.target.closest("[data-r]"); if (r) { rng = +r.dataset.r; renderChart(); return; }
+  const r = e.target.closest("[data-r]"); if (r) { rng = +r.dataset.r; intraN = 0; renderChart(); return; }
   if (e.target.closest("a[href^='http']")) return;
   const tr = e.target.closest("[data-c]"); if (tr) { location.hash = "#/" + tr.dataset.c; return; }
   const th = e.target.closest("#list th"); if (th) { const k = th.dataset.k; if (sortK === k) sortAsc = !sortAsc; else { sortK = k; sortAsc = ["code", "n", "s"].includes(k); } renderList(); }
@@ -226,4 +263,139 @@ window.addEventListener("hashchange", route);
   setInterval(tickClock, 1000); tickClock();
   await poll();
   route();
+  livePoll();
+})();
+
+/* ---------------- gün içi grafik ---------------- */
+function rngBtns() {
+  return [[0, "Gün içi"], [22, "1A"], [66, "3A"], [130, "6A"], [260, "1Y"]].map(([v, l]) => `<button data-r="${v}" class="${v === rng || (rng === 120 && v === 130) ? "on" : ""}">${l}</button>`).join("");
+}
+function buildBars(data, ticks) {
+  const iv = data.iv === "1m" ? 60 : data.iv === "2m" ? 120 : 300;
+  const bars = (data.b || []).map(b => b.slice());
+  let lastCum = null;
+  for (const [t, p, v] of ticks || []) {
+    const bt = Math.floor(t / iv) * iv, last = bars[bars.length - 1];
+    if (last && t < last[0]) continue;
+    const dv = lastCum != null && v != null ? Math.max(0, v - lastCum) : 0; if (v != null) lastCum = v;
+    if (last && bt === last[0]) { last[2] = Math.max(last[2], p); last[3] = Math.min(last[3], p); last[4] = p; last[5] += dv; }
+    else if (!last || bt > last[0]) bars.push([bt, last ? last[4] : p, Math.max(p, last ? last[4] : p), Math.min(p, last ? last[4] : p), p, dv]);
+  }
+  return {bars, iv};
+}
+function intraSVG(data, ticks, o) {
+  const {bars, iv} = buildBars(data, ticks);
+  if (!bars.length) return `<div class="loading">Bugün için gün içi veri yok.</div>`;
+  const W = o.W || 1000, Hh = o.H || 300, pl = 6, pr = 66, pt = 10, pb = 20, vh = (Hh - pt - pb) * 0.18;
+  const day = d => new Date(d * 1000).toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"});
+  let s = data.s, e = data.e; const d0 = day(bars[0][0]);
+  if (!s || day(s) !== d0) { const base = Date.parse(d0 + "T10:00:00+03:00") / 1000; s = base; e = base + 8 * 3600; }
+  e = Math.max(e, bars[bars.length - 1][0] + iv);
+  const pc = data.pc; let lo = Math.min(...bars.map(b => b[3])), hi = Math.max(...bars.map(b => b[2]));
+  if (pc) { lo = Math.min(lo, pc); hi = Math.max(hi, pc); } const pad = (hi - lo) * 0.08 || hi * 0.002 || 1; lo -= pad; hi += pad;
+  const ph = Hh - pt - pb - vh - 4;
+  const X = t => pl + (t - s) / (e - s) * (W - pl - pr), Y = v => pt + (hi - v) * ph / (hi - lo);
+  const cw = Math.max(1, (W - pl - pr) * iv / (e - s) * 0.68), vmax = Math.max(1, ...bars.map(b => b[5]));
+  let g = ""; for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4; g += `<line x1="${pl}" x2="${W - pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#1c2530"/><text x="${W - pr + 6}" y="${Y(v) + 3}">${fp(v)}</text>`; }
+  for (let hh = 10; hh <= 18; hh++) { const t = s + (hh - 10) * 3600; if (t > e) break; g += `<line x1="${X(t)}" x2="${X(t)}" y1="${pt}" y2="${Hh - pb}" stroke="#121a23"/><text x="${X(t)}" y="${Hh - 5}" text-anchor="middle">${hh}:00</text>`; }
+  const prevN = o.prevN || 0;
+  let cs = "", vs = "";
+  bars.forEach((b, i) => { const [t, op, h, l, c, v] = b, up = c >= op, col = up ? "#16c784" : "#ea3943", x = X(t + iv / 2);
+    const nw = prevN && i >= prevN ? ' class="cnew"' : "";
+    cs += `<g${nw}><line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}"/><rect x="${x - cw / 2}" y="${Y(Math.max(op, c))}" width="${cw}" height="${Math.max(1, Math.abs(Y(op) - Y(c)))}" fill="${col}"/></g>`;
+    vs += `<rect x="${x - cw / 2}" y="${Hh - pb - v / vmax * vh}" width="${cw}" height="${v / vmax * vh}" fill="${col}" opacity=".35"/>`; });
+  const last = bars[bars.length - 1][4], lc = pc ? (last >= pc ? "#16c784" : "#ea3943") : "#16c784", lx = X(bars[bars.length - 1][0] + iv / 2);
+  const pcl = pc ? `<line x1="${pl}" x2="${W - pr}" y1="${Y(pc)}" y2="${Y(pc)}" stroke="#7d8a99" stroke-dasharray="4 4"/><text x="${pl + 4}" y="${Y(pc) - 4}">Önceki kapanış ${fp(pc)}</text>` : "";
+  return {n: bars.length, svg: `<svg viewBox="0 0 ${W} ${Hh}" width="100%" style="display:block">${g}${pcl}${vs}${cs}
+    <line x1="${pl}" x2="${W - pr}" y1="${Y(last)}" y2="${Y(last)}" stroke="${lc}" stroke-dasharray="2 3" opacity=".7"/>
+    <circle class="lastdot" cx="${lx}" cy="${Y(last)}" r="3" fill="${lc}"/>
+    <rect x="${W - pr + 2}" y="${Y(last) - 9}" width="${pr - 4}" height="18" fill="${lc}"/><text x="${W - pr + 6}" y="${Y(last) + 4}" style="fill:#000;font-weight:700">${fp(last)}</text></svg>`,
+    label: `${d0 === new Date().toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"}) ? "Bugün" : "Son seans " + new Date(bars[0][0] * 1000).toLocaleDateString("tr-TR", {timeZone: "Europe/Istanbul", day: "2-digit", month: "short"})} · ${iv / 60} dk mum`};
+}
+let intraN = 0;
+function renderIntraChart(live) {
+  if (!INTRA) { $("#dchart").innerHTML = `<div class="rng">${rngBtns()}</div><div class="loading">Gün içi veri yok.</div>`; return; }
+  const r = intraSVG(INTRA, LIVE[openCode], {W: 1000, H: 320, prevN: live ? intraN : 0});
+  if (typeof r === "string") { $("#dchart").innerHTML = `<div class="rng">${rngBtns()}</div>` + r; return; }
+  intraN = r.n;
+  $("#dchart").innerHTML = `<div class="rng">${rngBtns()}<span class="leg">${r.label} · seans 10:00–18:00 (TR) · ~15 dk gecikmeli · canlı akışla güncellenir</span></div>${r.svg}`;
+}
+let xuN = 0;
+async function loadXU() { try { XI.data = await getJSON("data/i/XU100.json"); drawXU(); } catch (e) {} }
+function drawXU() {
+  if (!XI.data || !$("#xsvg")) return;
+  const r = intraSVG(XI.data, LIVE.XU100, {W: 1000, H: 250, prevN: xuN});
+  if (typeof r === "string") { $("#xsvg").innerHTML = r; return; }
+  xuN = r.n; $("#xsvg").innerHTML = r.svg;
+  const x = IDX.XU100; if (x) $("#xpx").innerHTML = `<span class="${cls(x.cp)}">${F2.format(x.p)} &nbsp;${fchg(x.c)} (${fpct(x.cp)})</span> <span class="flat">· ${r.label}</span>`;
+}
+
+/* ---------------- neden yükseldi / düştü ---------------- */
+function renderWhy() {
+  const q = Q[openCode] || {}; const el = $("#dwhy"); if (!el) return;
+  if (q.cp == null || Math.abs(q.cp) < 1) { el.innerHTML = `<div class="why"><b>Bugün belirgin bir fiyat hareketi yok</b> <span class="meta">(${fpct(q.cp)})</span></div>`; return; }
+  const up = q.cp > 0, w = whyOf(openCode, q.cp), lab = up ? "Yükseliş sebebi" : "Düşüş sebebi";
+  el.innerHTML = w ? `<div class="why ${up ? "up" : "down"}"><b class="${up ? "up" : "down"}">${lab}:</b> <a href="${esc(w.u)}" target="_blank" rel="noopener">${esc(w.t)}</a><span class="meta">${esc(w.s)} · ${trTime(w.d)}</span>
+      <div class="meta" style="margin:4px 0 0">Bugünkü ${fpct(q.cp)} hareketle eşleşen en ilgili gerçek haber başlığı (otomatik eşleştirme; kesin sebep olmayabilir).</div></div>`
+    : `<div class="why ${up ? "up" : "down"}"><b class="${up ? "up" : "down"}">${lab}:</b> Belirgin bir haber bulunamadı. <span class="meta">(${fpct(q.cp)} · son 3 günde bu hareketi açıklayan haber yok)</span></div>`;
+}
+
+/* ---------------- önerilen emir seviyeleri ---------------- */
+function tickSize(p) { return p < 20 ? 0.01 : p < 50 ? 0.02 : p < 100 ? 0.05 : p < 250 ? 0.1 : p < 500 ? 0.25 : p < 1000 ? 0.5 : p < 2500 ? 1 : 2.5; }
+const roundT = (x, mode) => { const t = tickSize(x); const f = mode === "down" ? Math.floor : mode === "up" ? Math.ceil : Math.round; return +(f(x / t + 1e-9) * t).toFixed(t < 0.1 ? 2 : t < 1 ? 2 : 1); };
+function orderLevels(code) {
+  const q = Q[code]; if (!H || !q?.p || H.c.length < 30) return null;
+  let {c, h, l, t} = H; c = c.slice(); h = h.map((x, i) => x ?? c[i]); l = l.map((x, i) => x ?? c[i]);
+  const today = new Date().toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"});
+  if (new Date(t[t.length - 1] * 1000).toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"}) === today) { c.pop(); h.pop(); l.pop(); }
+  const p = q.p, n = c.length; let trs = [];
+  for (let i = Math.max(1, n - 14); i < n; i++) trs.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
+  const atr = trs.reduce((a, b) => a + b, 0) / trs.length; if (!atr) return null;
+  const avg = k => n >= k ? c.slice(-k).reduce((a, b) => a + b, 0) / k : null;
+  const S = [], Rr = [];
+  const add = (arr, v, name) => { if (v != null && isFinite(v)) arr.push([v, name]); };
+  add(S, Math.min(...l.slice(-20)), "20 günlük dip"); add(Rr, Math.max(...h.slice(-20)), "20 günlük tepe");
+  if (n >= 50) { add(S, Math.min(...l.slice(-50)), "50 günlük dip"); add(Rr, Math.max(...h.slice(-50)), "50 günlük tepe"); }
+  for (const [v, nm] of [[avg(20), "20 günlük ortalama"], [avg(50), "50 günlük ortalama"]]) if (v) (v < p ? S : Rr).push([v, nm]);
+  for (let i = Math.max(3, n - 60); i < n - 3; i++) {
+    const wl = l.slice(i - 3, i + 4), wh = h.slice(i - 3, i + 4);
+    if (l[i] === Math.min(...wl)) add(S, l[i], "son dip (swing low)");
+    if (h[i] === Math.max(...wh)) add(Rr, h[i], "son tepe (swing high)");
+  }
+  const sup = S.filter(([v]) => v < p - 0.3 * atr && v >= p - 2.5 * atr).sort((a, b) => b[0] - a[0])[0];
+  const res = Rr.filter(([v]) => v > p + 0.3 * atr && v <= p + 3 * atr).sort((a, b) => a[0] - b[0])[0];
+  let buy = sup ? sup[0] + 0.1 * atr : p - atr, sell = res ? res[0] - 0.1 * atr : p + 1.5 * atr;
+  buy = roundT(Math.min(buy, p - tickSize(p)), "down"); sell = roundT(Math.max(sell, p + tickSize(p)), "up");
+  const stop = roundT(buy - atr, "down");
+  return {p, buy, sell, stop, atr, rr: (sell - buy) / Math.max(1e-9, buy - stop),
+    why: `Alış: ${sup ? `${sup[1]} (${fp(sup[0])}) desteğinin hemen üstü` : "yakında destek yok → fiyat − 1 ATR"} · Satış: ${res ? `${res[1]} (${fp(res[0])}) direncinin hemen altı` : "yakında direnç yok → fiyat + 1,5 ATR"} · Stop: alış − 1 ATR (ATR14 = ${fp(atr)})`};
+}
+function renderOrders() {
+  const el = $("#dorders"); if (!el) return; const o = orderLevels(openCode);
+  if (!o) { el.innerHTML = ""; return; }
+  const pd = x => fpct((x / o.p - 1) * 100), when = LIVE_AT && Date.now() - LIVE_AT < 90000 ? new Date(LIVE_AT).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul"}) : trTime(META.u);
+  el.innerHTML = `<div class="orders"><h2>ÖNERİLEN EMİR SEVİYELERİ <small>son güncelleme ${when} · her veri yenilemesinde yeniden hesaplanır</small></h2>
+    <div class="ogrid"><div><span>PİYASA</span><b>${fp(o.p)} ₺</b></div>
+    <div><span>ALIŞ EMRİ (piyasanın altı)</span><b class="up">${fp(o.buy)} ₺</b><small class="flat">${pd(o.buy)}</small></div>
+    <div><span>SATIŞ EMRİ (piyasanın üstü)</span><b class="down">${fp(o.sell)} ₺</b><small class="flat">${pd(o.sell)}</small></div>
+    <div><span>STOP-LOSS</span><b style="color:var(--amber)">${fp(o.stop)} ₺</b><small class="flat">${pd(o.stop)} · getiri/risk ${F1.format(o.rr)}</small></div></div>
+    <div class="ologic">${esc(o.why)}<div class="disc">⚠ Destek/direnç, son dip/tepe, hareketli ortalamalar ve ATR'den kurallarla hesaplanır. Yatırım tavsiyesi değildir.</div></div></div>`;
+}
+
+/* ---------------- açılış animasyonu ---------------- */
+(async function intro() {
+  const root = document.documentElement; if (!root.classList.contains("intro-on")) return;
+  try { sessionStorage.setItem("sbtm_intro", "1"); } catch (e) {}
+  const end = () => root.classList.remove("intro-on");
+  $("#intro").addEventListener("click", end);
+  if (!/introAt=/.test(location.search)) setTimeout(end, 2900);
+  try {
+    const txt = await (await fetch("assets/shark.svg")).text();
+    const d = (txt.match(/ d="([^"]+)"/) || [])[1] || ""; const subs = d.split(/(?=M)/).filter(Boolean);
+    const svg = $("#introSvg");
+    svg.innerHTML = `<path class="fillp" fill-rule="evenodd" d="${d}"/><g class="strokes">${subs.map(x => `<path d="${x}"/>`).join("")}</g>`;
+    svg.querySelectorAll(".strokes path").forEach(p => { const L = Math.ceil(p.getTotalLength()); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; });
+    const at = location.search.match(/introAt=(\d+)/); // ekran görüntüsü için animasyonu belirli bir anda dondur
+    if (at) requestAnimationFrame(() => document.getAnimations().forEach(x => { x.pause(); x.currentTime = +at[1]; }));
+  } catch (e) {}
 })();

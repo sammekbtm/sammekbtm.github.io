@@ -6,3 +6,5 @@ data/*.tmp
 shots/
 isy.html
 __pycache__/
+tools/kaynak_logo.png
+data/i/

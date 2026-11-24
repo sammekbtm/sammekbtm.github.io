@@ -8,13 +8,24 @@
 <meta name="description" content="sammekBTM – Borsa İstanbul (BIST) tüm hisseler, en çok işlem görenler, yükselenler, kırılım radarı ve haberler.">
 <link rel="icon" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=3">
+<script>/* açılış animasyonu: oturumda bir kez, hareket azaltma tercihine saygı */
+(function(){var f=/[?&]intro=1/.test(location.search),r=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,s=false;
+try{s=sessionStorage.getItem('sbtm_intro')}catch(e){}
+if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script>
 </head>
 <body>
+<div id="intro" aria-hidden="true">
+  <div class="intro-in">
+    <div class="intro-shark"><div class="sea"></div><svg id="introSvg" viewBox="0 0 463 301"></svg></div>
+    <div class="intro-word">SAMMEKBTM</div>
+    <div class="intro-sub">BORSA TAKİP MERKEZİ</div>
+  </div>
+</div>
 <div class="sticky">
 <header class="top">
   <a class="brand" href="#/">
-    <img id="logo" src="assets/shark.png" alt="" onerror="this.remove()">
+    <img id="logo" class="mark" src="assets/shark.svg" alt="">
     <span id="wordmark" class="wordmark">SAMMEKBTM</span>
     <span class="sub">BORSA TAKİP MERKEZİ</span>
   </a>
@@ -28,7 +39,10 @@
 </div>
 
 <main id="home">
-  <section id="idx" class="idx"></section>
+  <section class="hero">
+    <div class="xchart"><div class="xhead"><b>BIST 100</b> <span id="xpx" class="mono"></span> <span class="flat" style="margin-left:auto;font-size:11px">Gün içi · seans 10:00–18:00 (TR) · ~15 dk gecikmeli · canlı akış</span></div><div id="xsvg"></div></div>
+    <section id="idx" class="idx"></section>
+  </section>
   <section class="breadth" id="breadth"></section>
 
   <section class="boards">
@@ -71,10 +85,10 @@
 </div>
 
 <footer>
-  <img class="flogo" src="assets/logo.png" alt="SAMMEKBTM" onerror="this.remove()">
-  <p><b>sammekBTM</b> · Fiyatlar Yahoo Finance, haberler Google Haberler kaynaklıdır. Fiyatlar borsadan <b>~15 dk gecikmeli</b> gelir ve site yaklaşık her 5–10 dakikada bir otomatik güncellenir; ekran her 30 sn'de yeni veriyi kontrol eder.
+  <div class="fbrand"><img src="assets/shark.svg" alt=""><span>SAMMEKBTM</span></div>
+  <p><b>sammekBTM</b> · Anlık akış: TradingView (BIST verisi <b>~15 dk gecikmeli</b>, ekran 15 sn'de bir yenilenir). Gün içi mumlar, geçmiş fiyatlar ve sinyaller: Yahoo Finance (GitHub Actions ile ~5–10 dk'da bir). Haberler: Google Haberler.
   Hisse listesi: İş Yatırım. Özet/Potansiyel bölümleri gerçek fiyat verisi ve haber başlıklarından kurallarla otomatik üretilir. <b>Yatırım tavsiyesi değildir.</b></p>
 </footer>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

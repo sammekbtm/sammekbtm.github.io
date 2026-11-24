@@ -114,3 +114,57 @@ svg text{font-family:var(--mono);font-size:10px;fill:var(--dim)}
 @media(max-width:640px){.brklist td.name{display:none}.brklist td.f{font-size:11.5px}}
 .brand img{height:50px;border-radius:4px}
 .flogo{display:block;width:160px;margin:0 auto 10px;border-radius:6px}
+/* ---- v2 ---- */
+.brand img.mark{height:40px;width:auto;border-radius:0;filter:drop-shadow(0 0 6px rgba(47,129,247,.35))}
+.fbrand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px}
+.fbrand img{height:34px}.fbrand span{font-weight:900;letter-spacing:.25em;color:#fff;font-size:16px}
+.hero{display:grid;grid-template-columns:1.6fr 1fr;gap:10px}
+.hero .idx{grid-template-columns:repeat(2,1fr)}
+.xchart{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+.xhead{display:flex;gap:10px;align-items:center;margin-bottom:4px}
+.xhead b{color:var(--amber);letter-spacing:.1em;font-size:12px}
+#xsvg svg,#ichart svg{display:block}
+.cnew{animation:cnew .8s ease-out}
+@keyframes cnew{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.lastdot{animation:pulse 1.6s infinite}
+@keyframes pulse{0%{r:3}50%{r:6;opacity:.4}100%{r:3}}
+.why{margin:10px 0 0;padding:10px 12px;border-radius:4px;border-left:4px solid var(--dim);background:var(--panel2);font-size:14px}
+.why.up{border-color:var(--up)}.why.down{border-color:var(--down)}
+.why b{letter-spacing:.03em}.why a{text-decoration:underline;text-decoration-color:#445}
+.why .meta{color:var(--dim);font-size:11px;margin-left:6px}
+tr.wr td{padding-top:0;border-bottom:1px solid #121a23;font-size:11px;color:var(--dim);white-space:normal;line-height:1.3}
+tr.wr td span.up,tr.wr td span.down{font-weight:600}
+.board tr.hasr td{border-bottom:0}
+.orders{margin-top:14px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.ogrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line)}
+.ogrid div{background:var(--panel2);padding:10px 12px}
+.ogrid span{display:block;color:var(--dim);font-size:10.5px;letter-spacing:.06em}
+.ogrid b{font-family:var(--mono);font-size:20px}
+.ogrid small{display:block;margin-top:2px}
+.ologic{padding:8px 12px;font-size:12px;color:var(--txt)}
+.ologic .disc{margin-top:6px}
+/* intro */
+#intro{display:none}
+.intro-on #intro{display:flex;position:fixed;inset:0;z-index:100;background:radial-gradient(ellipse at 50% 60%,#0b1a2b 0%,#03060a 70%);align-items:center;justify-content:center;animation:introOut .55s ease-in 2.25s forwards}
+.intro-on body{overflow:hidden}
+.intro-in{text-align:center}
+.intro-shark{position:relative;width:min(360px,70vw);margin:0 auto;animation:swim 1.1s cubic-bezier(.2,.8,.2,1) both}
+.intro-shark svg{width:100%;overflow:visible}
+.intro-shark .strokes path{fill:none;stroke:#9fd3ff;stroke-width:1.2;animation:draw 1.05s ease-out forwards,fadeo .35s ease-out 1s forwards}
+.intro-shark .fillp{fill:#fff;opacity:0;animation:fillin .35s ease-out .95s forwards}
+.intro-shark svg{animation:chomp .32s ease-in-out 1.25s 1}
+.sea{position:absolute;left:-30%;right:-30%;top:55%;height:2px;background:linear-gradient(90deg,transparent,#2f81f7,transparent);opacity:.6;animation:sea 1.2s ease-out both}
+.intro-word{margin-top:18px;font-weight:900;color:#fff;font-size:clamp(28px,6vw,54px);letter-spacing:.35em;padding-left:.35em;clip-path:inset(0 100% 0 0);animation:reveal .6s cubic-bezier(.7,0,.2,1) 1.25s forwards}
+.intro-sub{color:var(--amber);font-family:var(--mono);letter-spacing:.5em;font-size:12px;margin-top:8px;opacity:0;animation:fadeup .4s ease-out 1.7s forwards}
+@keyframes swim{from{transform:translate(-55vw,30px) rotate(-8deg) scale(.6);opacity:0}60%{opacity:1}to{transform:none}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes fillin{to{opacity:1}}
+@keyframes fadeo{to{opacity:0}}
+@keyframes chomp{0%,100%{transform:scale(1)}45%{transform:scale(1.08,.9)}}
+@keyframes sea{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes reveal{to{clip-path:inset(0 0 0 0)}}
+@keyframes fadeup{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes introOut{to{opacity:0;visibility:hidden}}
+@media(max-width:1100px){.hero{grid-template-columns:1fr}.hero .idx{grid-template-columns:repeat(3,1fr)}.ogrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.hero .idx{grid-template-columns:repeat(2,1fr)}.brand img.mark{height:32px}.wordmark{font-size:17px}}
+@media (prefers-reduced-motion: reduce){.fl-up,.fl-down,.cnew,.lastdot,.tape-inner{animation:none!important}}
