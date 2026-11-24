@@ -111,7 +111,7 @@ function flash() {
     const k = n.p > o.p ? "fl-up" : "fl-down"; tr.querySelectorAll('[data-f="p"],[data-f="cp"]').forEach(td => { td.classList.remove("fl-up", "fl-down"); void td.offsetWidth; td.classList.add(k); }); });
 }
 
-function renderAll() { renderIdx(); renderBoards(); renderTape(); renderList(); flash(); drawXU(); }
+function renderAll() { renderIdx(); renderBoards(); renderTape(); renderList(); flash(); drawXU(); if (window.BTM_HOOK) BTM_HOOK(); }
 
 async function poll() {
   try {
@@ -414,9 +414,9 @@ function renderWhy() {
 /* ---------------- önerilen emir seviyeleri ---------------- */
 function tickSize(p) { return p < 20 ? 0.01 : p < 50 ? 0.02 : p < 100 ? 0.05 : p < 250 ? 0.1 : p < 500 ? 0.25 : p < 1000 ? 0.5 : p < 2500 ? 1 : 2.5; }
 const roundT = (x, mode) => { const t = tickSize(x); const f = mode === "down" ? Math.floor : mode === "up" ? Math.ceil : Math.round; return +(f(x / t + 1e-9) * t).toFixed(t < 0.1 ? 2 : t < 1 ? 2 : 1); };
-function orderLevels(code) {
-  const q = Q[code]; if (!H || !q?.p || H.c.length < 30) return null;
-  let {c, h, l, t} = H; c = c.slice(); h = h.map((x, i) => x ?? c[i]); l = l.map((x, i) => x ?? c[i]);
+function orderLevels(code, HH = H) {
+  const q = Q[code]; if (!HH || !q?.p || HH.c.length < 30) return null;
+  let {c, h, l, t} = HH; c = c.slice(); h = h.map((x, i) => x ?? c[i]); l = l.map((x, i) => x ?? c[i]);
   const today = new Date().toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"});
   if (new Date(t[t.length - 1] * 1000).toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"}) === today) { c.pop(); h.pop(); l.pop(); }
   const p = q.p, n = c.length; let trs = [];

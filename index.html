@@ -8,7 +8,7 @@
 <meta name="description" content="sammekBTM – Borsa İstanbul (BIST) tüm hisseler, en çok işlem görenler, yükselenler, kırılım radarı ve haberler.">
 <link rel="icon" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <script>/* açılış animasyonu: oturumda bir kez, hareket azaltma tercihine saygı */
 (function(){var f=/[?&]intro=1/.test(location.search),r=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,s=false;
 try{s=sessionStorage.getItem('sbtm_intro')}catch(e){}
@@ -31,10 +31,11 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
   </a>
   <div class="search" role="search">
     <span class="sic" aria-hidden="true">⌕</span>
-    <input id="s" type="search" placeholder="Hisse ara… (örn. THYAO, Aselsan)" autocomplete="off" spellcheck="false" aria-label="Hisse ara" aria-controls="sugg" aria-expanded="false">
+    <input id="s" type="search" placeholder="Hisse ara… (örn. THYAO)" autocomplete="off" spellcheck="false" aria-label="Hisse ara" aria-controls="sugg" aria-expanded="false">
     <kbd class="hide-s">/</kbd>
     <div id="sugg" class="sugg" role="listbox" hidden></div>
   </div>
+  <button class="kkbtn" id="kkgo" title="Kırılım Kontrol">⚡ <span>Kırılım Kontrol</span></button>
   <div class="status">
     <div><span id="mkt" class="mkt">—</span> <span id="clock" class="mono"></span></div>
     <div class="small">Son veri: <span id="upd" class="mono">—</span> · <span id="next" class="mono"></span></div>
@@ -52,6 +53,19 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
   <section class="breadth" id="breadth"></section>
 
   <section class="hint" id="hint">💡 <b>Nasıl kullanılır?</b> Bir hisseye dokun → fiyat, grafik, alış/satış önerisi ve haberler açılır. <b>☆</b> yıldıza dokun → favorilerine eklenir (bu cihazda saklanır). Üstteki kutudan istediğin hisseyi ara. <button class="x" id="hintx" aria-label="İpucunu kapat">✕</button></section>
+
+  <section class="kk glass" id="kirilim">
+    <div class="kk-l">
+      <h2>⚡ KIRILIM KONTROL <small>hisse kodunu yaz, kırılım yapıyor mu hemen gör</small></h2>
+      <form id="kkf" class="kkf" autocomplete="off">
+        <div class="kkin"><input id="kkq" type="search" placeholder="Hisse kodu (örn. THYAO)" aria-label="Kırılım kontrolü için hisse" spellcheck="false"><div id="kks" class="sugg" role="listbox" hidden></div></div>
+        <button class="kkb" type="submit">KONTROL ET</button>
+      </form>
+      <div id="kkr" class="kkr"><div class="kk-empty">Bir hisse yaz ve <b>KONTROL ET</b>'e bas. Örnek:
+        <button type="button" class="chip" data-kk="THYAO">THYAO</button><button type="button" class="chip" data-kk="ASELS">ASELS</button><button type="button" class="chip" data-kk="GARAN">GARAN</button></div></div>
+    </div>
+    <div class="kk-r"><h3>🔥 KIRILIM YAKLAŞAN HİSSELER <small>20 günlük zirveye en yakın, bugün artıda, hacmi artan</small></h3><table id="kkl"><tr><td><div class="skel"></div><div class="skel"></div><div class="skel"></div></td></tr></table></div>
+  </section>
 
   <section class="boards">
     <div class="board wide fav" id="favbox" hidden><h2>★ FAVORİLERİM <small>yıldızladığın hisseler</small></h2><table id="b-fav"></table></div>
@@ -101,11 +115,21 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
   </div>
 </div>
 
+<button class="aifab" id="aifab" aria-label="BTM Aİ asistanını aç"><img src="assets/shark.svg" alt=""><span>BTM Aİ</span></button>
+<div class="aipanel" id="aipanel" hidden role="dialog" aria-label="BTM Aİ sohbet">
+  <div class="aihead"><img src="assets/shark.svg" alt=""><div><b>BTM Aİ</b><small>sitedeki canlı verilerle cevap veren asistan</small></div><button class="aix" id="aix" aria-label="Kapat">✕</button></div>
+  <div class="aimsgs" id="aimsgs" aria-live="polite"></div>
+  <div class="aichips" id="aichips"></div>
+  <form class="aiform" id="aiform" autocomplete="off"><input id="aiq" placeholder="Sor: THYAO alınır mı? · BIST 100 kaç?" aria-label="BTM Aİ'ye soru sor"><button aria-label="Gönder">➤</button></form>
+</div>
+<div class="bgwave" aria-hidden="true"></div>
+
 <footer>
   <div class="fbrand"><img src="assets/shark.svg" alt=""><span>SAMMEKBTM</span></div>
   <p><b>sammekBTM</b> · Anlık akış: TradingView (BIST verisi <b>~15 dk gecikmeli</b>, ekran 15 sn'de bir yenilenir). Gün içi mumlar, geçmiş fiyatlar ve sinyaller: Yahoo Finance (GitHub Actions ile ~5–10 dk'da bir). Haberler: Google Haberler.
   Hisse listesi: İş Yatırım. Özet/Potansiyel bölümleri gerçek fiyat verisi ve haber başlıklarından kurallarla otomatik üretilir. <b>Yatırım tavsiyesi değildir.</b></p>
 </footer>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
+<script src="btm.js?v=1"></script>
 </body>
 </html>
