@@ -168,3 +168,4 @@ tr.wr td span.up,tr.wr td span.down{font-weight:600}
 @media(max-width:1100px){.hero{grid-template-columns:1fr}.hero .idx{grid-template-columns:repeat(3,1fr)}.ogrid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){.hero .idx{grid-template-columns:repeat(2,1fr)}.brand img.mark{height:32px}.wordmark{font-size:17px}}
 @media (prefers-reduced-motion: reduce){.fl-up,.fl-down,.cnew,.lastdot,.tape-inner{animation:none!important}}
+@media(max-width:640px){.xhead>span.flat{display:none}.xhead{flex-wrap:wrap}}
