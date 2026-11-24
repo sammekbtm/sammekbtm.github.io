@@ -8,7 +8,7 @@
 <meta name="description" content="sammekBTM – Borsa İstanbul (BIST) tüm hisseler, en çok işlem görenler, yükselenler, kırılım radarı ve haberler.">
 <link rel="icon" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <script>/* açılış animasyonu: oturumda bir kez, hareket azaltma tercihine saygı */
 (function(){var f=/[?&]intro=1/.test(location.search),r=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,s=false;
 try{s=sessionStorage.getItem('sbtm_intro')}catch(e){}
@@ -29,6 +29,12 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
     <span id="wordmark" class="wordmark">SAMMEKBTM</span>
     <span class="sub">BORSA TAKİP MERKEZİ</span>
   </a>
+  <div class="search" role="search">
+    <span class="sic" aria-hidden="true">⌕</span>
+    <input id="s" type="search" placeholder="Hisse ara… (örn. THYAO, Aselsan)" autocomplete="off" spellcheck="false" aria-label="Hisse ara" aria-controls="sugg" aria-expanded="false">
+    <kbd class="hide-s">/</kbd>
+    <div id="sugg" class="sugg" role="listbox" hidden></div>
+  </div>
   <div class="status">
     <div><span id="mkt" class="mkt">—</span> <span id="clock" class="mono"></span></div>
     <div class="small">Son veri: <span id="upd" class="mono">—</span> · <span id="next" class="mono"></span></div>
@@ -45,7 +51,10 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
   </section>
   <section class="breadth" id="breadth"></section>
 
+  <section class="hint" id="hint">💡 <b>Nasıl kullanılır?</b> Bir hisseye dokun → fiyat, grafik, alış/satış önerisi ve haberler açılır. <b>☆</b> yıldıza dokun → favorilerine eklenir (bu cihazda saklanır). Üstteki kutudan istediğin hisseyi ara. <button class="x" id="hintx" aria-label="İpucunu kapat">✕</button></section>
+
   <section class="boards">
+    <div class="board wide fav" id="favbox" hidden><h2>★ FAVORİLERİM <small>yıldızladığın hisseler</small></h2><table id="b-fav"></table></div>
     <div class="board"><h2>EN ÇOK İŞLEM GÖRENLER <small>TL hacim</small></h2><table id="b-vol"></table></div>
     <div class="board"><h2>EN ÇOK ALINANLAR <small>yükselen + hacim temposu yüksek</small></h2><table id="b-buy"></table></div>
     <div class="board"><h2>EN ÇOK YÜKSELENLER</h2><table id="b-up"></table></div>
@@ -57,29 +66,37 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
     <div class="allhead">
       <h2>TÜM BIST HİSSELERİ <small id="cnt"></small></h2>
       <div class="filters">
-        <input id="q" placeholder="Hisse kodu veya şirket ara… (örn. THYAO)" autocomplete="off">
-        <select id="sector"><option value="">Tüm sektörler</option></select>
-        <select id="dir"><option value="">Hepsi</option><option value="up">Yükselenler</option><option value="down">Düşenler</option><option value="brk">Kırılım var</option></select>
+        <input id="q" type="search" placeholder="Listede ara…" autocomplete="off" aria-label="Listede ara">
+        <select id="sector" aria-label="Sektör"><option value="">Tüm sektörler</option></select>
       </div>
+    </div>
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="" class="on">Tümü</button>
+      <button role="tab" data-tab="vol">En Çok İşlem</button>
+      <button role="tab" data-tab="up">Yükselenler</button>
+      <button role="tab" data-tab="down">Düşenler</button>
+      <button role="tab" data-tab="brk">Kırılım Var</button>
+      <button role="tab" data-tab="fav">★ Favorilerim <span id="favn"></span></button>
     </div>
     <div class="tablewrap">
     <table id="list" class="list">
       <thead><tr>
-        <th data-k="code">Kod</th><th data-k="n" class="hide-s">Şirket</th><th data-k="s" class="hide-m">Sektör</th>
+        <th class="st" aria-label="Favori"></th><th data-k="code">Kod</th><th data-k="n" class="hide-s">Şirket</th><th data-k="s" class="hide-m">Sektör</th>
         <th data-k="p" class="r">Son</th><th data-k="c" class="r hide-s">Fark</th><th data-k="cp" class="r">%</th>
         <th data-k="l" class="r hide-m">Düşük</th><th data-k="h" class="r hide-m">Yüksek</th>
         <th data-k="v" class="r hide-m">Hacim (lot)</th><th data-k="tv" class="r">Hacim (TL)</th><th data-k="mc" class="r hide-m">Piy. Değ.</th>
-        <th data-k="sc" class="r hide-s">Sinyal</th>
+        <th data-k="sc" class="r hide-s" title="Fiyat hareketlerinden kurallarla hesaplanan genel teknik görünüm">Sinyal</th>
       </tr></thead>
-      <tbody></tbody>
+      <tbody><tr><td colspan="13" class="loading">Hisseler yükleniyor…</td></tr></tbody>
     </table>
     </div>
+    <div class="more" id="morebox" hidden><button id="moreb">Daha fazla göster</button></div>
   </section>
 </main>
 
-<div id="detail" class="detail" hidden>
+<div id="detail" class="detail" hidden role="dialog" aria-modal="true" aria-label="Hisse detayı">
   <div class="dwrap">
-    <button class="close" id="close" title="Kapat">✕</button>
+    <div class="dbar"><button class="back" id="back">← Geri</button><span id="dbcode" class="mono"></span><button class="star big" id="dstar" aria-label="Favorilere ekle">☆</button><button class="close" id="close" title="Kapat (Esc)" aria-label="Kapat">✕</button></div>
     <div id="dbody"></div>
   </div>
 </div>
@@ -89,6 +106,6 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
   <p><b>sammekBTM</b> · Anlık akış: TradingView (BIST verisi <b>~15 dk gecikmeli</b>, ekran 15 sn'de bir yenilenir). Gün içi mumlar, geçmiş fiyatlar ve sinyaller: Yahoo Finance (GitHub Actions ile ~5–10 dk'da bir). Haberler: Google Haberler.
   Hisse listesi: İş Yatırım. Özet/Potansiyel bölümleri gerçek fiyat verisi ve haber başlıklarından kurallarla otomatik üretilir. <b>Yatırım tavsiyesi değildir.</b></p>
 </footer>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

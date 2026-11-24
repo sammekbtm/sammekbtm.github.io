@@ -5,6 +5,12 @@ const LIVE = {}; // canlı akıştan gelen fiyat örnekleri: kod -> [[t, p, v]]
 const XI = {data: null};
 let sortK = "tv", sortAsc = false, lastU = 0, nextAt = 0;
 const POLL = 30000;
+let TAB = "", LIMIT = 150;
+let FAV = []; try { FAV = JSON.parse(localStorage.getItem("sbtm_fav") || "[]").filter(x => typeof x === "string"); } catch (e) {}
+const isFav = c => FAV.includes(c);
+function toggleFav(c) { FAV = isFav(c) ? FAV.filter(x => x !== c) : [...FAV, c]; try { localStorage.setItem("sbtm_fav", JSON.stringify(FAV)); } catch (e) {}
+  renderBoards(); renderList(); updStar(); }
+const starBtn = c => `<button class="star${isFav(c) ? " on" : ""}" data-fav="${c}" aria-label="${isFav(c) ? "Favorilerden çıkar" : "Favorilere ekle"}" title="${isFav(c) ? "Favorilerden çıkar" : "Favorilere ekle"}">${isFav(c) ? "★" : "☆"}</button>`;
 
 const nf = (d) => new Intl.NumberFormat("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
 const F2 = nf(2), F0 = nf(0), F1 = nf(1);
@@ -38,13 +44,15 @@ function rows() {
 function whyOf(code, cp) { const w = WHY[code]; if (!w || cp == null || Math.abs(cp) < 1) return null; return w[cp > 0 ? "up" : "down"] || null; }
 function rowMini(r, extra, withWhy) {
   const w = withWhy ? whyOf(r.code, r.cp) : null;
-  const wr = withWhy && Math.abs(r.cp) >= 1 ? `<tr class="wr" data-c="${r.code}"><td colspan="5">${w ? `<span class="${r.cp > 0 ? "up" : "down"}">${r.cp > 0 ? "Yükseliş" : "Düşüş"} sebebi:</span> ${esc(w.t)}` : "Belirgin bir haber bulunamadı"}</td></tr>` : "";
-  return `<tr data-c="${r.code}" class="${wr ? "hasr" : ""}" title="${w ? esc(w.t) + " — " + esc(w.s) : ""}"><td class="code">${r.code}</td><td class="name">${esc(r.n)}</td><td class="r" data-f="p">${fp(r.p)}</td>
+  const wr = withWhy && Math.abs(r.cp) >= 1 ? `<tr class="wr" data-c="${r.code}"><td></td><td colspan="${extra ? 4 : 3}">${w ? `<span class="${r.cp > 0 ? "up" : "down"}">${r.cp > 0 ? "Yükseliş" : "Düşüş"} sebebi:</span> ${esc(w.t)}` : "Belirgin bir haber bulunamadı"}</td></tr>` : "";
+  return `<tr data-c="${r.code}" class="${wr ? "hasr" : ""}" tabindex="0" title="${w ? esc(w.t) + " — " + esc(w.s) : ""}"><td class="st">${starBtn(r.code)}</td><td class="code">${r.code}</td><td class="name">${esc(r.n)}</td><td class="r" data-f="p">${fp(r.p)}</td>
   <td class="r"><span class="pill ${cls(r.cp)}" data-f="cp">${fpct(r.cp)}</span></td>${extra ? `<td class="r">${extra}</td>` : ""}</tr>${wr}`;
 }
 
 function renderBoards() {
   const R = rows();
+  const fv = R.filter(r => isFav(r.code)); $("#favbox").hidden = !fv.length;
+  $("#b-fav").innerHTML = fv.sort((a, b) => b.tv - a.tv).map(r => rowMini(r, big(r.tv) + " ₺", true)).join("");
   const byVol = [...R].sort((a, b) => b.tv - a.tv).slice(0, 10);
   $("#b-vol").innerHTML = byVol.map(r => rowMini(r, big(r.tv) + " ₺", true)).join("");
   const buy = R.filter(r => r.cp > 0 && r.sig?.vr && r.tv > 5e6).map(r => ({...r, bs: Math.log10(1 + r.tv) * Math.min(r.sig.vr, 6) * Math.min(r.cp, 10)}))
@@ -56,7 +64,7 @@ function renderBoards() {
   const brk = R.filter(r => r.sig && r.sig.f.some(f => f[0] === "up" || f[0] === "down"))
     .sort((a, b) => Math.abs(b.sc) * Math.log10(10 + b.tv) - Math.abs(a.sc) * Math.log10(10 + a.tv)).slice(0, 12);
   $("#b-brk").className = "brklist";
-  $("#b-brk").innerHTML = brk.map(r => `<tr data-c="${r.code}"><td class="code">${r.code}</td><td class="name">${esc(r.n)}</td><td class="r" data-f="p">${fp(r.p)}</td>
+  $("#b-brk").innerHTML = brk.map(r => `<tr data-c="${r.code}" tabindex="0"><td class="st">${starBtn(r.code)}</td><td class="code">${r.code}</td><td class="name">${esc(r.n)}</td><td class="r" data-f="p">${fp(r.p)}</td>
     <td class="r"><span class="pill ${cls(r.cp)}" data-f="cp">${fpct(r.cp)}</span></td>
     <td class="f">${r.sig.f.filter(f => f[0] === "up" || f[0] === "down").map(f => `<span class="${f[0]}">${f[0] === "up" ? "▲" : "▼"} ${esc(f[1])}</span>`).join(" &nbsp; ")}</td></tr>`).join("")
     || `<tr><td class="flat">Şu an belirgin kırılım yok.</td></tr>`;
@@ -78,13 +86,17 @@ function renderTape() {
 }
 
 function renderList() {
-  const q = $("#q").value.trim().toLocaleUpperCase("tr-TR"), sec = $("#sector").value, dir = $("#dir").value;
+  const q = $("#q").value.trim().toLocaleUpperCase("tr-TR"), sec = $("#sector").value, dir = TAB;
   let R = rows().filter(r => (!q || r.code.includes(q) || r.n.toLocaleUpperCase("tr-TR").includes(q)) && (!sec || r.s === sec) &&
-    (!dir || (dir === "up" ? r.cp > 0 : dir === "down" ? r.cp < 0 : r.sig?.f.some(f => f[0] === "up" || f[0] === "down"))));
+    (!dir || dir === "vol" || (dir === "up" ? r.cp > 0 : dir === "down" ? r.cp < 0 : dir === "fav" ? isFav(r.code) : r.sig?.f.some(f => f[0] === "up" || f[0] === "down"))));
   const k = sortK;
   R.sort((a, b) => { let x = a[k], y = b[k]; if (typeof x === "string") return sortAsc ? x.localeCompare(y, "tr") : y.localeCompare(x, "tr"); x = x ?? -Infinity; y = y ?? -Infinity; return sortAsc ? x - y : y - x; });
   $("#cnt").textContent = `${R.length} / ${Object.keys(TICK).length} hisse`;
-  $("#list tbody").innerHTML = R.map(r => `<tr data-c="${r.code}"><td class="code">${r.code}</td><td class="name hide-s">${esc(r.n)}</td><td class="name hide-m">${esc(r.s)}</td>
+  $("#favn").textContent = FAV.length ? "(" + FAV.length + ")" : "";
+  const all = R.length; R = R.slice(0, LIMIT);
+  $("#morebox").hidden = all <= LIMIT; $("#moreb").textContent = `Daha fazla göster (${all - LIMIT} hisse daha)`;
+  if (!all) { $("#list tbody").innerHTML = `<tr><td colspan="13" class="empty">${dir === "fav" && !FAV.length ? "Henüz favorin yok. Bir hissenin yanındaki <b>☆</b> yıldıza dokunarak ekleyebilirsin." : "Aramana uyan hisse bulunamadı. Yazdığını kontrol et veya filtreyi temizle."}</td></tr>`; }
+  else $("#list tbody").innerHTML = R.map(r => `<tr data-c="${r.code}" tabindex="0"><td class="st">${starBtn(r.code)}</td><td class="code">${r.code}</td><td class="name hide-s">${esc(r.n)}</td><td class="name hide-m">${esc(r.s)}</td>
     <td class="r" data-f="p">${fp(r.p)}</td><td class="r hide-s ${cls(r.c)}">${fchg(r.c)}</td><td class="r"><span class="pill ${cls(r.cp)}" data-f="cp">${fpct(r.cp)}</span></td>
     <td class="r hide-m">${fp(r.l)}</td><td class="r hide-m">${fp(r.h)}</td><td class="r hide-m">${big(r.v)}</td><td class="r">${big(r.tv)}</td><td class="r hide-m">${r.mc ? big(r.mc * 1e6) : "—"}</td>
     <td class="r hide-s">${sigPill(r.sig)}</td></tr>`).join("");
@@ -150,11 +162,14 @@ function route() {
   const m = location.hash.match(/^#\/([A-Z0-9]{2,8})$/);
   if (m && TICK[m[1]]) openDetail(m[1]); else closeDetail(true);
 }
+function updStar() { const b = $("#dstar"); if (!b || !openCode) return; const f = isFav(openCode); b.textContent = f ? "★ Favoride" : "☆ Favorilere ekle"; b.classList.toggle("on", f); }
 function closeDetail(fromRoute) { openCode = null; $("#detail").hidden = true; document.body.style.overflow = ""; if (!fromRoute && location.hash) history.pushState("", "", location.pathname); }
 async function openDetail(c) {
   openCode = c; H = null; NEWS = null; $("#detail").hidden = false; document.body.style.overflow = "hidden";
   rng = 0; INTRA = null;
-  $("#dbody").innerHTML = `<div id="dhead"></div><div id="dwhy"></div><div id="dchart" class="chartbox"><div class="loading">Grafik yükleniyor…</div></div><div id="dorders"></div><div id="dozet"></div><div id="dnews" class="news"></div>`;
+  $("#dbcode").textContent = c; updStar(); $("#detail").scrollTop = 0;
+  $("#dbody").innerHTML = `<div id="dhead"></div><div id="dorders"><div class="orders"><div class="loading">Alış / satış önerisi hesaplanıyor…</div></div></div><div id="dwhy"></div><div id="dchart" class="chartbox"><div class="loading">Grafik yükleniyor…</div></div><div id="dstats"></div><div id="dozet"></div><div id="dnews" class="news"><div class="loading">Haberler yükleniyor…</div></div>`;
+  setTimeout(() => $("#back")?.focus({preventScroll: true}), 30);
   renderDetailHead(c);
   const [h, n, i] = await Promise.all([getJSON(`data/h/${c}.json`).catch(() => null), getJSON(`data/n/${c}.json`).catch(() => null), getJSON(`data/i/${c}.json`).catch(() => null)]);
   if (openCode !== c) return; H = h; NEWS = n ? n.n : []; INTRA = i;
@@ -163,17 +178,28 @@ async function openDetail(c) {
 function renderDetailHead(c, live) {
   const t = TICK[c], q = Q[c] || {}, s = SIG[c] || {};
   const prev = $("#dhead .px")?.dataset.p;
-  $("#dhead").innerHTML = `<div class="dh"><div><div class="code">${c}</div><div class="nm">${esc(t.n)} · ${esc(t.s)}</div></div>
-    <div class="px ${cls(q.cp)}" data-p="${q.p}">${fp(q.p)} ₺</div><div class="ch ${cls(q.cp)}">${fchg(q.c)} (${fpct(q.cp)})</div>
-    <div class="nm" style="margin-left:auto;font-size:11px">Borsa zamanı: ${q.t ? trTime(q.t) : "—"} · ~15 dk gecikmeli</div></div>
+  const wasOpen = $("#dstats details")?.open;
+  const arrow = q.cp > 0 ? "▲" : q.cp < 0 ? "▼" : "■", word = q.cp > 0 ? "bugün yükselişte" : q.cp < 0 ? "bugün düşüşte" : "bugün değişim yok";
+  const dpos = q.h > q.l ? Math.max(0, Math.min(100, (q.p - q.l) / (q.h - q.l) * 100)) : 50;
+  $("#dhead").innerHTML = `<div class="sumcard ${cls(q.cp)}"><div class="sc-id"><div class="code">${c}</div><div class="nm">${esc(t.n)}</div><div class="sec">${esc(t.s)}</div></div>
+    <div class="sc-px"><div class="px ${cls(q.cp)}" data-p="${q.p}">${fp(q.p)} ₺</div><div class="ch ${cls(q.cp)}">${arrow} ${q.c == null ? "—" : (q.c > 0 ? "+" : "") + (q.p >= 1 ? F2 : nf(4)).format(q.c)} ₺ (${fpct(q.cp)}) · ${word}</div>
+    <div class="dayr" title="Bugünkü en düşük ve en yüksek fiyat arasında şu anki konum"><span>${fp(q.l)}</span><div class="dbar2"><i style="left:${dpos}%"></i></div><span>${fp(q.h)}</span></div>
+    <div class="when">Bugünkü en düşük – en yüksek · Borsa zamanı ${q.t ? trTime(q.t) : "—"} · ~15 dk gecikmeli</div></div></div>`;
+  $("#dstats").innerHTML = `<details class="morex"${wasOpen ? " open" : ""}><summary>📊 Detaylı veriler <span class="flat">(hacim, piyasa değeri, RSI, ortalamalar…)</span></summary>
     <div class="stats">
       <div><span>ÖNCEKİ KAPANIŞ</span><b>${fp(q.pc)}</b></div><div><span>GÜN İÇİ DÜŞÜK / YÜKSEK</span><b>${fp(q.l)} / ${fp(q.h)}</b></div>
       <div><span>HACİM (LOT)</span><b>${big(q.v)}</b></div><div><span>HACİM (TL)</span><b>${big(q.tv)} ₺</b></div>
       <div><span>PİYASA DEĞERİ</span><b>${t.mc ? big(t.mc * 1e6) + " ₺" : "—"}</b></div><div><span>52 HAFTA DÜŞÜK / YÜKSEK</span><b>${fp(q.l52)} / ${fp(q.h52)}</b></div>
-      <div><span>RSI (14)</span><b>${s.rsi ?? "—"}</b></div><div><span>ORT. 20 / 50 GÜN</span><b>${fp(s.ma20)} / ${fp(s.ma50)}</b></div>
-      <div><span>20G DESTEK / DİRENÇ</span><b>${fp(s.l20)} / ${fp(s.h20)}</b></div><div><span>5 GÜN</span><b class="${cls(s.c5)}">${fpct(s.c5)}</b></div>
+      <div title="0–100 arası. 70 üstü: çok alınmış (pahalanmış olabilir), 30 altı: çok satılmış (ucuzlamış olabilir)"><span>RSI (14) ⓘ</span><b>${s.rsi ?? "—"}${s.rsi >= 70 ? ' <small class="down">çok alınmış</small>' : s.rsi != null && s.rsi <= 30 ? ' <small class="up">çok satılmış</small>' : ""}</b></div><div title="Son 20 ve 50 günün ortalama kapanış fiyatı. Fiyat ortalamanın üstündeyse eğilim yukarı"><span>ORT. 20 / 50 GÜN ⓘ</span><b>${fp(s.ma20)} / ${fp(s.ma50)}</b></div>
+      <div title="Destek: son 20 günün en düşüğü (fiyatın genelde durduğu taban). Direnç: en yükseği (fiyatın zorlandığı tavan)"><span>20G DESTEK / DİRENÇ ⓘ</span><b>${fp(s.l20)} / ${fp(s.h20)}</b></div><div><span>5 GÜN</span><b class="${cls(s.c5)}">${fpct(s.c5)}</b></div>
       <div><span>20 GÜN</span><b class="${cls(s.c20)}">${fpct(s.c20)}</b></div><div><span>60 GÜN</span><b class="${cls(s.c60)}">${fpct(s.c60)}</b></div>
-    </div>`;
+    </div>
+    <div class="gloss"><b>Terimler ne demek?</b><ul>
+      <li><b>RSI:</b> Hissenin son 14 günde ne kadar alınıp satıldığını 0–100 arası gösterir. 70 üstü “çok alınmış”, 30 altı “çok satılmış”.</li>
+      <li><b>Ortalama (20/50 gün):</b> O günlerdeki ortalama fiyat. Fiyat ortalamanın üstündeyse genel gidiş yukarı.</li>
+      <li><b>Destek / Direnç:</b> Fiyatın genelde durduğu taban / zorlandığı tavan.</li>
+      <li><b>Kırılım:</b> Fiyatın bu tavanı yukarı ya da tabanı aşağı geçmesi.</li>
+      <li><b>Lot:</b> 1 lot = 1 adet hisse.</li></ul></div></details>`;
   if (live && prev && +prev !== q.p) { const el = $("#dhead .px"); el.classList.add(q.p > prev ? "fl-up" : "fl-down"); }
   if (live && H) { renderWhy(); renderChart(true); renderOrders(); renderOzet(); }
 }
@@ -245,22 +271,67 @@ function renderNews() {
 
 /* ---------------- init ---------------- */
 document.addEventListener("click", e => {
+  const fb = e.target.closest("[data-fav]"); if (fb) { e.stopPropagation(); toggleFav(fb.dataset.fav); return; }
+  const tb = e.target.closest("[data-tab]"); if (tb) { setTab(tb.dataset.tab); return; }
+  const sg = e.target.closest("[data-sg]"); if (sg) { pickSugg(sg.dataset.sg); return; }
+  if (!e.target.closest(".search")) hideSugg();
   const r = e.target.closest("[data-r]"); if (r) { rng = +r.dataset.r; intraN = 0; renderChart(); return; }
   if (e.target.closest("a[href^='http']")) return;
   const tr = e.target.closest("[data-c]"); if (tr) { location.hash = "#/" + tr.dataset.c; return; }
-  const th = e.target.closest("#list th"); if (th) { const k = th.dataset.k; if (sortK === k) sortAsc = !sortAsc; else { sortK = k; sortAsc = ["code", "n", "s"].includes(k); } renderList(); }
+  const th = e.target.closest("#list th[data-k]"); if (th) { const k = th.dataset.k; if (sortK === k) sortAsc = !sortAsc; else { sortK = k; sortAsc = ["code", "n", "s"].includes(k); } renderList(); }
 });
 $("#close").onclick = () => closeDetail();
+$("#back").onclick = () => closeDetail();
+$("#dstar").onclick = () => openCode && toggleFav(openCode);
+$("#moreb").onclick = () => { LIMIT += 200; renderList(); };
+$("#hintx").onclick = () => { $("#hint").hidden = true; try { localStorage.setItem("sbtm_hint", "0"); } catch (e) {} };
+try { if (localStorage.getItem("sbtm_hint") === "0") $("#hint").hidden = true; } catch (e) {}
+function setTab(t) {
+  TAB = t; LIMIT = 150;
+  document.querySelectorAll("#tabs [data-tab]").forEach(b => { const on = b.dataset.tab === t; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+  if (t === "up") { sortK = "cp"; sortAsc = false; } else if (t === "down") { sortK = "cp"; sortAsc = true; } else if (t === "vol" || t === "") { sortK = "tv"; sortAsc = false; } else if (t === "brk") { sortK = "sc"; sortAsc = false; }
+  renderList();
+}
+/* ---- üst arama kutusu: anında öneri ---- */
+const trU = x => String(x).toLocaleUpperCase("tr-TR");
+const fold = x => trU(x).replace(/[İI]/g, "I").replace(/Ş/g, "S").replace(/Ğ/g, "G").replace(/Ü/g, "U").replace(/Ö/g, "O").replace(/Ç/g, "C");
+let SG = [], sgi = 0;
+function suggest() {
+  const v = fold($("#s").value.trim()); const box = $("#sugg");
+  if (!v) return hideSugg();
+  const all = Object.keys(TICK).map(c => { const n = fold(TICK[c].n); const sc = c === v ? 0 : c.startsWith(v) ? 1 : n.startsWith(v) ? 2 : c.includes(v) ? 3 : n.includes(v) ? 4 : 9; return [sc, c]; })
+    .filter(x => x[0] < 9).sort((a, b) => a[0] - b[0] || (Q[b[1]]?.tv || 0) - (Q[a[1]]?.tv || 0));
+  SG = all.slice(0, 8).map(x => x[1]); sgi = 0;
+  box.innerHTML = SG.length ? SG.map((c, i) => { const q = Q[c] || {};
+    return `<div class="sg${i === sgi ? " on" : ""}" role="option" data-sg="${c}"><b>${c}</b><span class="n">${esc(TICK[c].n)}</span><span class="p mono">${fp(q.p)}</span><span class="pill ${cls(q.cp)}">${fpct(q.cp)}</span></div>`; }).join("")
+    : `<div class="sg none">“${esc($("#s").value)}” için sonuç yok</div>`;
+  box.hidden = false; $("#s").setAttribute("aria-expanded", "true");
+}
+function hideSugg() { $("#sugg").hidden = true; $("#s").setAttribute("aria-expanded", "false"); }
+function pickSugg(c) { hideSugg(); $("#s").value = ""; $("#s").blur(); location.hash = "#/" + c; }
+$("#s").addEventListener("input", suggest);
+$("#s").addEventListener("focus", suggest);
+$("#s").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!SG.length) return; sgi = (sgi + (e.key === "ArrowDown" ? 1 : SG.length - 1)) % SG.length;
+    document.querySelectorAll("#sugg .sg").forEach((el, i) => el.classList.toggle("on", i === sgi)); }
+  else if (e.key === "Enter") { if (SG[sgi]) pickSugg(SG[sgi]); }
+  else if (e.key === "Escape") { $("#s").value = ""; hideSugg(); $("#s").blur(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !openCode) { e.preventDefault(); $("#s").focus(); }
+  if (e.key === "Enter" && document.activeElement?.matches?.("tr[data-c]")) location.hash = "#/" + document.activeElement.dataset.c;
+});
 $("#detail").addEventListener("click", e => { if (e.target.id === "detail") closeDetail(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && openCode) closeDetail(); });
 window.addEventListener("hashchange", route);
-["#q", "#sector", "#dir"].forEach(s => $(s).addEventListener("input", renderList));
+["#q", "#sector"].forEach(s => $(s).addEventListener("input", () => { LIMIT = 150; renderList(); }));
 
 (async function init() {
   const t = await getJSON("data/tickers.json"); Object.assign(TICK, t);
   const secs = [...new Set(Object.values(TICK).map(x => x.s))].sort((a, b) => a.localeCompare(b, "tr"));
   $("#sector").innerHTML += secs.map(s => `<option>${esc(s)}</option>`).join("");
   setInterval(tickClock, 1000); tickClock();
+  const setStk = () => document.documentElement.style.setProperty("--stk", ($(".sticky")?.offsetHeight || 0) + "px"); addEventListener("resize", setStk); setStk();
   await poll();
   route();
   livePoll();
@@ -372,14 +443,16 @@ function orderLevels(code) {
 }
 function renderOrders() {
   const el = $("#dorders"); if (!el) return; const o = orderLevels(openCode);
-  if (!o) { el.innerHTML = ""; return; }
-  const pd = x => fpct((x / o.p - 1) * 100), when = LIVE_AT && Date.now() - LIVE_AT < 90000 ? new Date(LIVE_AT).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul"}) : trTime(META.u);
-  el.innerHTML = `<div class="orders"><h2>ÖNERİLEN EMİR SEVİYELERİ <small>son güncelleme ${when} · her veri yenilemesinde yeniden hesaplanır</small></h2>
-    <div class="ogrid"><div><span>PİYASA</span><b>${fp(o.p)} ₺</b></div>
-    <div><span>ALIŞ EMRİ (piyasanın altı)</span><b class="up">${fp(o.buy)} ₺</b><small class="flat">${pd(o.buy)}</small></div>
-    <div><span>SATIŞ EMRİ (piyasanın üstü)</span><b class="down">${fp(o.sell)} ₺</b><small class="flat">${pd(o.sell)}</small></div>
-    <div><span>STOP-LOSS</span><b style="color:var(--amber)">${fp(o.stop)} ₺</b><small class="flat">${pd(o.stop)} · getiri/risk ${F1.format(o.rr)}</small></div></div>
-    <div class="ologic">${esc(o.why)}<div class="disc">⚠ Destek/direnç, son dip/tepe, hareketli ortalamalar ve ATR'den kurallarla hesaplanır. Yatırım tavsiyesi değildir.</div></div></div>`;
+  if (!o) { el.innerHTML = H ? `<div class="orders"><div class="loading">Bu hisse için yeterli geçmiş veri yok; alış/satış önerisi hesaplanamadı.</div></div>` : el.innerHTML; return; }
+  const pd = x => "%" + F1.format(Math.abs((x / o.p - 1) * 100)), when = LIVE_AT && Date.now() - LIVE_AT < 90000 ? new Date(LIVE_AT).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul"}) : trTime(META.u);
+  const wasOpen = el.querySelector("details")?.open;
+  el.innerHTML = `<div class="orders"><h2>ÖNERİLEN EMİR FİYATLARI <small>şu anki fiyat ${fp(o.p)} ₺ · güncellendi ${when} · otomatik yenilenir</small></h2>
+    <div class="ogrid plan">
+    <div class="ob buy"><span>ALMAK İÇİN UYGUN FİYAT</span><b>${fp(o.buy)} ₺</b><small>şu anki fiyatın ${pd(o.buy)} altı · bu fiyattan <b>alış emri</b> girilebilir</small></div>
+    <div class="ob sell"><span>SATMAK İÇİN HEDEF FİYAT</span><b>${fp(o.sell)} ₺</b><small>şu anki fiyatın ${pd(o.sell)} üstü · bu fiyattan <b>satış emri</b> girilebilir</small></div>
+    <div class="ob stop"><span>ZARAR-KES (STOP)</span><b>${fp(o.stop)} ₺</b><small>fiyat buraya düşerse zararı büyütmemek için satılır</small></div></div>
+    <details class="ologic"${wasOpen ? " open" : ""}><summary>Bu fiyatlar nasıl hesaplandı?</summary>${esc(o.why)} · Kazanç/risk oranı ${F1.format(o.rr)} <span class="flat">(ATR: bir günde ortalama ne kadar oynadığı)</span></details>
+    <div class="disc">⚠ Destek/direnç, son dip/tepe, hareketli ortalamalar ve günlük oynaklıktan kurallarla otomatik hesaplanır. Yatırım tavsiyesi değildir.</div></div>`;
 }
 
 /* ---------------- açılış animasyonu ---------------- */
