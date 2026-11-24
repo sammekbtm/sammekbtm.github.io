@@ -139,6 +139,8 @@ function updLabel() {
 const TV_URL = "https://scanner.tradingview.com/turkey/scan";
 const TV_COLS = ["name", "close", "change", "change_abs", "volume", "high", "low", "Value.Traded"];
 const LIVE_POLL = 15000;
+function introPrice(ts) { if (!window.INTRO) return; if (!ts || !Object.keys(Q).length) return INTRO.set("price", false, "Fiyatlar doğrulanamadı");
+  INTRO.set("price", true, `Fiyatlar güncellendi — borsa saati ${new Date(ts * 1000).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit"})}`); }
 async function livePoll() {
   try {
     const body = JSON.stringify({columns: TV_COLS, filter: [{left: "type", operation: "equal", right: "stock"}], range: [0, 2000]});
@@ -151,8 +153,10 @@ async function livePoll() {
       o.p = p; o.cp = cp; o.c = c; o.v = v; o.h = h; o.l = l; if (tv != null) o.tv = Math.round(tv); o.lt = t; return true; };
     for (const it of a.data) { const code = it.d[0]; if (!Q[code]) continue; if (apply(Q[code], it.d)) { n++; (LIVE[code] = LIVE[code] || []).push([t, it.d[1], it.d[4]]); if (LIVE[code].length > 3000) LIVE[code].shift(); } }
     for (const it of b?.data || []) { const k = it.d[0]; if (!IDX[k]) IDX[k] = {}; apply(IDX[k], it.d); (LIVE[k] = LIVE[k] || []).push([t, it.d[1], it.d[4]]); }
-    if (n > 100) { LIVE_AT = Date.now(); updLabel(); renderAll(); if (openCode) renderDetailHead(openCode, true); }
-  } catch (e) { console.warn("canlı akış alınamadı, dosya verisi kullanılıyor", e); }
+    if (n > 100) { LIVE_AT = Date.now(); updLabel(); renderAll(); if (openCode) renderDetailHead(openCode, true);
+      window.INTRO?.set("live", true, `Canlı akış bağlandı — ${n} hisse (~15 dk gecikmeli)`); introPrice(t); }
+    else { window.INTRO?.set("live", false, "Canlı akış yanıt vermedi — son kayıtlı veri gösteriliyor"); introPrice(META.mt); }
+  } catch (e) { console.warn("canlı akış alınamadı, dosya verisi kullanılıyor", e); window.INTRO?.set("live", false, "Canlı akış alınamadı — son kayıtlı veri gösteriliyor"); introPrice(META.mt); }
   nextAt = Date.now() + LIVE_POLL; setTimeout(livePoll, LIVE_POLL);
 }
 
@@ -327,12 +331,21 @@ window.addEventListener("hashchange", route);
 ["#q", "#sector"].forEach(s => $(s).addEventListener("input", () => { LIMIT = 150; renderList(); }));
 
 (async function init() {
-  const t = await getJSON("data/tickers.json"); Object.assign(TICK, t);
+  let t; try { t = await getJSON("data/tickers.json"); } catch (e) { window.INTRO?.set("conn", false, "Borsa verisine bağlanılamadı"); window.INTRO?.fail(); throw e; }
+  Object.assign(TICK, t); window.INTRO?.set("conn", true, "Borsa verisine bağlanıldı");
   const secs = [...new Set(Object.values(TICK).map(x => x.s))].sort((a, b) => a.localeCompare(b, "tr"));
   $("#sector").innerHTML += secs.map(s => `<option>${esc(s)}</option>`).join("");
   setInterval(tickClock, 1000); tickClock();
   const setStk = () => document.documentElement.style.setProperty("--stk", ($(".sticky")?.offsetHeight || 0) + "px"); addEventListener("resize", setStk); setStk();
   await poll();
+  const nq = Object.keys(TICK).filter(c => Q[c]).length;
+  if (nq) { window.INTRO?.set("count", true, `${nq} / ${Object.keys(TICK).length} hisse doğrulandı`);
+  }
+  else { window.INTRO?.set("count", false, "Hisse fiyatları alınamadı"); }
+  (async () => { const top = Object.keys(Q).sort((a, b) => (Q[b].tv || 0) - (Q[a].tv || 0)).slice(0, 6);
+    const r = await Promise.all(top.map(c => getJSON(`data/n/${c}.json`).then(x => (x.n || []).length).catch(() => -1)));
+    const ok = r.filter(x => x >= 0); const n = ok.reduce((a, b) => a + b, 0);
+    window.INTRO?.set("news", ok.length > 0, ok.length ? `Haberler yüklendi (${top.slice(0, ok.length).join(", ").replace(/, ([^,]*)$/, " ve $1")} için ${n} haber)` : "Haberler yüklenemedi"); })();
   route();
   livePoll();
 })();
@@ -455,20 +468,3 @@ function renderOrders() {
     <div class="disc">⚠ Destek/direnç, son dip/tepe, hareketli ortalamalar ve günlük oynaklıktan kurallarla otomatik hesaplanır. Yatırım tavsiyesi değildir.</div></div>`;
 }
 
-/* ---------------- açılış animasyonu ---------------- */
-(async function intro() {
-  const root = document.documentElement; if (!root.classList.contains("intro-on")) return;
-  try { sessionStorage.setItem("sbtm_intro", "1"); } catch (e) {}
-  const end = () => root.classList.remove("intro-on");
-  $("#intro").addEventListener("click", end);
-  if (!/introAt=/.test(location.search)) setTimeout(end, 2900);
-  try {
-    const txt = await (await fetch("assets/shark.svg")).text();
-    const d = (txt.match(/ d="([^"]+)"/) || [])[1] || ""; const subs = d.split(/(?=M)/).filter(Boolean);
-    const svg = $("#introSvg");
-    svg.innerHTML = `<path class="fillp" fill-rule="evenodd" d="${d}"/><g class="strokes">${subs.map(x => `<path d="${x}"/>`).join("")}</g>`;
-    svg.querySelectorAll(".strokes path").forEach(p => { const L = Math.ceil(p.getTotalLength()); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; });
-    const at = location.search.match(/introAt=(\d+)/); // ekran görüntüsü için animasyonu belirli bir anda dondur
-    if (at) requestAnimationFrame(() => document.getAnimations().forEach(x => { x.pause(); x.currentTime = +at[1]; }));
-  } catch (e) {}
-})();

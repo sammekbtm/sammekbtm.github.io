@@ -8,19 +8,24 @@
 <meta name="description" content="sammekBTM – Borsa İstanbul (BIST) tüm hisseler, en çok işlem görenler, yükselenler, kırılım radarı ve haberler.">
 <link rel="icon" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=6">
-<script>/* açılış animasyonu: oturumda bir kez, hareket azaltma tercihine saygı */
-(function(){var f=/[?&]intro=1/.test(location.search),r=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,s=false;
-try{s=sessionStorage.getItem('sbtm_intro')}catch(e){}
-if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script>
+<link rel="stylesheet" href="style.css?v=7">
+<script>/* açılış animasyonu: her açılışta oynar (?nointro=1 ile atlanır) */
+if(!/[?&]nointro=1/.test(location.search))document.documentElement.classList.add('intro-on');</script>
 </head>
 <body>
-<div id="intro" aria-hidden="true">
-  <div class="intro-in">
-    <div class="intro-shark"><div class="sea"></div><svg id="introSvg" viewBox="0 0 463 301"></svg></div>
-    <div class="intro-word">SAMMEKBTM</div>
-    <div class="intro-sub">BORSA TAKİP MERKEZİ</div>
+<div id="intro" role="status" aria-label="sammekBTM açılıyor">
+  <div class="i-rays"></div>
+  <div class="i-in">
+    <div class="i-logo-wrap"><div class="i-ring"></div><img id="iLogo" class="i-logo" src="assets/shark.svg" alt=""></div>
+    <div class="i-word">SAMMEKBTM</div>
+    <div class="i-sub">BORSA TAKİP MERKEZİ</div>
+    <div class="i-verify">
+      <ul id="iChk"></ul>
+      <div class="i-bar"><i id="iBar"></i></div>
+      <div class="i-pct mono" id="iPct">Veriler doğrulanıyor… 0%</div>
+    </div>
   </div>
+  <button class="i-skip" id="iSkip" type="button">Geç ›</button>
 </div>
 <div class="sticky">
 <header class="top">
@@ -129,7 +134,8 @@ if(f||(!s&&!r)){document.documentElement.classList.add('intro-on')}})();</script
   <p><b>sammekBTM</b> · Anlık akış: TradingView (BIST verisi <b>~15 dk gecikmeli</b>, ekran 15 sn'de bir yenilenir). Gün içi mumlar, geçmiş fiyatlar ve sinyaller: Yahoo Finance (GitHub Actions ile ~5–10 dk'da bir). Haberler: Google Haberler.
   Hisse listesi: İş Yatırım. Özet/Potansiyel bölümleri gerçek fiyat verisi ve haber başlıklarından kurallarla otomatik üretilir. <b>Yatırım tavsiyesi değildir.</b></p>
 </footer>
-<script src="app.js?v=5"></script>
+<script src="intro.js?v=1"></script>
+<script src="app.js?v=6"></script>
 <script src="btm.js?v=1"></script>
 </body>
 </html>
