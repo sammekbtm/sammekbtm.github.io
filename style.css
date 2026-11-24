@@ -112,3 +112,5 @@ svg text{font-family:var(--mono);font-size:10px;fill:var(--dim)}
 .board td.name{max-width:92px;overflow:hidden;text-overflow:ellipsis}
 .board td.r:last-child{color:var(--dim);font-size:11.5px}
 @media(max-width:640px){.brklist td.name{display:none}.brklist td.f{font-size:11.5px}}
+.brand img{height:50px;border-radius:4px}
+.flogo{display:block;width:160px;margin:0 auto 10px;border-radius:6px}
