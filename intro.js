@@ -7,19 +7,20 @@
   const res = {}, shown = {};
   if (!root.classList.contains("intro-on") || !ov) { window.INTRO = {set() {}, fail() {}}; return; }
   const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const T0 = performance.now(), VERIFY_AT = 1350, GAP = 430, CAP = 9000;
+  const T0 = performance.now(), VERIFY_AT = 1650, GAP = 430, CAP = 9000;
   const $i = id => document.getElementById(id);
   const logo = $i("iLogo"), ul = $i("iChk");
   ul.innerHTML = STEPS.map(([k, t]) => `<li data-k="${k}" class="pend"><span class="ic"></span><span class="tx">${t}</span></li>`).join("");
   const A = (el, kf, o) => el && el.animate ? el.animate(kf, Object.assign({fill: "both", easing: "cubic-bezier(.2,.8,.2,1)"}, o)) : null;
   // 1) logo küçükten büyür, parlar, ısırır
   A(logo, [{transform: "scale(.12) rotate(-8deg)", opacity: 0, filter: "drop-shadow(0 0 0 rgba(47,129,247,0))"},
+           {opacity: 1, offset: .22},
            {transform: "scale(1.08) rotate(2deg)", opacity: 1, offset: .75, filter: "drop-shadow(0 0 38px rgba(47,129,247,.95))"},
-           {transform: "scale(1) rotate(0)", opacity: 1, filter: "drop-shadow(0 0 22px rgba(47,129,247,.7))"}], {duration: RM ? 900 : 1200});
-  if (!RM) A(logo, [{transform: "scale(1)"}, {transform: "scale(1.07,.88)"}, {transform: "scale(1)"}], {duration: 300, delay: 1220, composite: "add", fill: "none"});
-  A(document.querySelector(".i-ring"), [{transform: "translate(-50%,-50%) scale(.2)", opacity: 0}, {transform: "translate(-50%,-50%) scale(.2)", opacity: .9, offset: .01}, {transform: "translate(-50%,-50%) scale(2.4)", opacity: 0}], {duration: 900, delay: 1150, easing: "ease-out"});
-  A(document.querySelector(".i-word"), [{clipPath: "inset(0 100% 0 0)", opacity: .2, letterSpacing: ".9em"}, {clipPath: "inset(0 0 0 0)", opacity: 1, letterSpacing: ".35em"}], {duration: 650, delay: 850});
-  A(document.querySelector(".i-sub"), [{opacity: 0, transform: "translateY(8px)"}, {opacity: 1, transform: "none"}], {duration: 400, delay: 1250});
+           {transform: "scale(1) rotate(0)", opacity: 1, filter: "drop-shadow(0 0 22px rgba(47,129,247,.7))"}], {duration: RM ? 1200 : 1500, easing: "cubic-bezier(.45,0,.25,1)"});
+  if (!RM) A(logo, [{transform: "scale(1)"}, {transform: "scale(1.07,.88)"}, {transform: "scale(1)"}], {duration: 300, delay: 1500, composite: "add", fill: "none"});
+  A(document.querySelector(".i-ring"), [{transform: "translate(-50%,-50%) scale(.2)", opacity: 0}, {transform: "translate(-50%,-50%) scale(.2)", opacity: .9, offset: .01}, {transform: "translate(-50%,-50%) scale(2.4)", opacity: 0}], {duration: 900, delay: 1400, easing: "ease-out"});
+  A(document.querySelector(".i-word"), [{clipPath: "inset(0 100% 0 0)", opacity: .2, letterSpacing: ".9em"}, {clipPath: "inset(0 0 0 0)", opacity: 1, letterSpacing: ".35em"}], {duration: 650, delay: 1150});
+  A(document.querySelector(".i-sub"), [{opacity: 0, transform: "translateY(8px)"}, {opacity: 1, transform: "none"}], {duration: 400, delay: 1550});
   A(document.querySelector(".i-verify"), [{opacity: 0, transform: "translateY(12px)"}, {opacity: 1, transform: "none"}], {duration: 380, delay: VERIFY_AT - 150});
   A(document.querySelector(".i-rays"), [{opacity: 0, transform: "scale(.6) rotate(0deg)"}, {opacity: 1, transform: "scale(1) rotate(25deg)"}], {duration: 2600, easing: "ease-out"});
 
