@@ -79,6 +79,7 @@
     ["borç", .8], ["borc", .8], ["temerrüt", 2.5], ["reddedildi", 1.5], ["reddetti", 1.5], ["iptal", 1.2], ["sat tavsiye", 1.5], ["hedef fiyat düşür", 1.5], ["hedef fiyatını düşür", 1.5],
     ["taban serisi", 1], ["kayıp", .8], ["işlem yasağı", 2], ["devre kesici", .8], ["grev", 1.2], ["yangın", 1.5], ["kapatma", 1], ["uyarı", .6], ["tedbir", 1.2], ["haciz", 2]];
   function titleScore(t) { const s = String(t || "").toLocaleLowerCase("tr-TR"); let x = 0;
+    if (/viop|işlem iptali|borsa istanbul a\.ş\.|endeks değişikli|devre kesici uygulama/.test(s)) return 0; // rutin borsa duyuruları: şirket haberi değil
     for (const [w, k] of POS) if (s.includes(w)) x += k; for (const [w, k] of NEG) if (s.includes(w)) x -= k;
     if (/\bkap\b|kamuyu aydınlatma/.test(s)) x *= 1.3; return Math.max(-3, Math.min(3, x)); }
   function newsScore(items, nowSec, upTo) {
