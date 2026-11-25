@@ -32,3 +32,24 @@ for (const c of codes) {
 const M = reset ? {date: today, setAt: Math.round(now), late: hm(now) >= OPEN, br: br != null ? +br.toFixed(3) : null, n: ok} : {...meta, n: ok};
 M.nu = Math.round(now); fs.writeFileSync(path.join(OD, "_meta.json"), JSON.stringify(M));
 console.log(`seviyeler: ${reset ? "YENİDEN KURULDU" : "sabit (sadece haber etkisi güncellendi)"} · ${today} ${hm(M.setAt)} · ${ok} hisse · haber değişen ${nchg} · genişlik ${br != null ? (br * 100).toFixed(0) + "%" : "-"}`);
+
+// Güçlü destek önerileri: db var, K/R>=1.5, fiyat stop üstünde ve hedef altında, asgari likidite.
+// Sıra: seviyeye yakınlık, güven, K/R, hacim. Çıktı: data/supports.json (günlük sabit seviyeler + anlık fiyat).
+const Q = (rd(path.join(ROOT, "data/quotes.json")) || {}).q || {};
+const cands = [];
+for (const c of codes) {
+  const L = rd(path.join(OD, c + ".json")); if (!L || !L.db || !L.t1) continue;
+  const db = L.db.p, t1 = L.t1.p, st = L.sd, q = Q[c] || {}, p = q.p, tv = q.tv || 0;
+  if (p == null || st == null || st >= db || t1 <= db || p <= st || p >= t1 || tv < 1e6) continue;
+  const rr = (t1 - db) / (db - st); if (rr < 1.5) continue;
+  cands.push({c, p, db, t1, st, rr, conf: L.conf, tv, dist: (p - db) / p * 100});
+}
+const maxTv = Math.max(1, ...cands.map(x => x.tv));
+for (const x of cands) {
+  const prox = Math.exp(-Math.abs(x.dist) / 3);
+  x.score = 0.40 * prox + 0.25 * (x.conf || 0) / 100 + 0.20 * Math.min(x.rr / 3, 1) + 0.15 * Math.log10(1 + x.tv) / Math.log10(1 + maxTv);
+}
+cands.sort((a, b) => b.score - a.score);
+const items = cands.slice(0, 10).map(x => ({c: x.c, p: x.p, db: x.db, t1: x.t1, st: x.st, rr: +x.rr.toFixed(2), conf: x.conf}));
+fs.writeFileSync(path.join(ROOT, "data/supports.json"), JSON.stringify({date: today, u: Math.round(now), n: cands.length, items}));
+console.log(`güçlü destek önerileri: ${items.length} / ${cands.length} aday → data/supports.json`);

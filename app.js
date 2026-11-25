@@ -3,6 +3,7 @@ const $ = s => document.querySelector(s);
 const TICK = {}; let Q = {}, SIG = {}, IDX = {}, WHY = {}, META = {u: 0, mt: 0}, LIVE_AT = 0;
 const LIVE = {}; // canlı akıştan gelen fiyat örnekleri: kod -> [[t, p, v]]
 const XI = {data: null};
+let SUP = null;
 let sortK = "tv", sortAsc = false, lastU = 0, nextAt = 0;
 const POLL = 30000;
 let TAB = "", LIMIT = 150;
@@ -111,11 +112,34 @@ function flash() {
     const k = n.p > o.p ? "fl-up" : "fl-down"; tr.querySelectorAll('[data-f="p"],[data-f="cp"]').forEach(td => { td.classList.remove("fl-up", "fl-down"); void td.offsetWidth; td.classList.add(k); }); });
 }
 
-function renderAll() { renderIdx(); renderBoards(); renderTape(); renderList(); flash(); drawXU(); if (window.BTM_HOOK) BTM_HOOK(); }
+
+function renderSupports() {
+  const el = $("#b-sup"); if (!el) return;
+  const tb = el.querySelector("tbody"); if (!tb) return;
+  const items = SUP && SUP.items ? SUP.items : null;
+  if (!items) { tb.innerHTML = `<tr><td colspan="6" class="loading">Öneriler yükleniyor…</td></tr>`; return; }
+  if (!items.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">Şu an güçlü destek alışına yakın, kazanç/risk oranı yeterli hisse yok.</td></tr>`; return; }
+  const pc = (x, p) => { if (x == null || !p) return "—"; const v = (x / p - 1) * 100; return (v > 0 ? "+" : v < 0 ? "−" : "") + "%" + F1.format(Math.abs(v)); };
+  tb.innerHTML = items.map(it => {
+    const q = Q[it.c] || {}, p = q.p ?? it.p;
+    const dcls = p != null && it.db != null && p <= it.db ? "up" : "flat";
+    return `<tr data-c="${it.c}" tabindex="0">
+      <td class="code">${it.c}</td>
+      <td class="r" data-f="p">${fp(p)}${q.cp != null ? ` <span class="pill ${cls(q.cp)}">${fpct(q.cp)}</span>` : ""}</td>
+      <td class="r"><b class="mono">${fp(it.db)}</b> <span class="${dcls}">${pc(it.db, p)}</span></td>
+      <td class="r"><b class="mono">${fp(it.t1)}</b> <span class="up">${pc(it.t1, p)}</span></td>
+      <td class="r"><b class="mono">${fp(it.st)}</b> <span class="down">${pc(it.st, p)}</span></td>
+      <td class="r"><span class="supconf">%${it.conf ?? "—"}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+function renderAll() { renderIdx(); renderBoards(); renderSupports(); renderTape(); renderList(); flash(); drawXU(); if (window.BTM_HOOK) BTM_HOOK(); }
 
 async function poll() {
   try {
-    const d = await getJSON("data/quotes.json");
+    const [d, s] = await Promise.all([getJSON("data/quotes.json"), getJSON("data/supports.json").catch(() => null)]);
+    if (s && s.items) SUP = s;
     if (d.u !== lastU) {
       prevQ = snapshot(); const keep = LIVE_AT && Date.now() - LIVE_AT < 120000 ? Q : null;
       Q = d.q; if (keep) for (const c in keep) if (Q[c] && keep[c].lt) Object.assign(Q[c], pick(keep[c]));
