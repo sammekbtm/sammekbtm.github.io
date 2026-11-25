@@ -8,7 +8,12 @@
 <meta name="description" content="sammekBTM – Borsa İstanbul (BIST) tüm hisseler, en çok işlem görenler, yükselenler, kırılım radarı ve haberler.">
 <link rel="icon" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#07090c">
+<meta name="application-name" content="sammekBTM">
+<meta name="apple-mobile-web-app-title" content="sammekBTM">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="style.css?v=8">
 <script>/* açılış animasyonu: her açılışta oynar (?nointro=1 ile atlanır) */
 if(!/[?&]nointro=1/.test(location.search))document.documentElement.classList.add('intro-on');</script>
 </head>
@@ -40,6 +45,7 @@ if(!/[?&]nointro=1/.test(location.search))document.documentElement.classList.add
     <kbd class="hide-s">/</kbd>
     <div id="sugg" class="sugg" role="listbox" hidden></div>
   </div>
+  <button class="appbtn" id="appbtn" title="sammekBTM'yi bilgisayarına uygulama olarak indir">💻 <span>Uygulamayı İndir</span></button>
   <button class="kkbtn" id="kkgo" title="Kırılım Kontrol">⚡ <span>Kırılım Kontrol</span></button>
   <div class="status">
     <div><span id="mkt" class="mkt">—</span> <span id="clock" class="mono"></span></div>
@@ -134,8 +140,9 @@ if(!/[?&]nointro=1/.test(location.search))document.documentElement.classList.add
   <p><b>sammekBTM</b> · Anlık akış: TradingView (BIST verisi <b>~15 dk gecikmeli</b>, ekran 15 sn'de bir yenilenir). Gün içi mumlar, geçmiş fiyatlar ve sinyaller: Yahoo Finance (GitHub Actions ile ~5–10 dk'da bir). Haberler: Google Haberler.
   Hisse listesi: İş Yatırım. Özet/Potansiyel bölümleri gerçek fiyat verisi ve haber başlıklarından kurallarla otomatik üretilir. <b>Yatırım tavsiyesi değildir.</b></p>
 </footer>
-<script src="intro.js?v=3"></script>
+<script src="intro.js?v=4"></script>
 <script src="app.js?v=6"></script>
 <script src="btm.js?v=1"></script>
+<script src="install.js?v=1"></script>
 </body>
 </html>

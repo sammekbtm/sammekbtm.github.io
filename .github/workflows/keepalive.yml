@@ -1,0 +1,32 @@
+name: canli-tut
+# GitHub, 60 gün hareketsiz depolarda zamanlanmış iş akışlarını kapatır.
+# Bu iş her ay küçük bir commit atar ve veri güncelleme akışını açık tutar.
+on:
+  schedule:
+    - cron: "23 4 1,15 * *"   # ayın 1'i ve 15'i, 07:23 (TR)
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Depoyu canlı tut (küçük commit)
+        run: |
+          mkdir -p data
+          echo "sammekBTM canlı: $(TZ=Europe/Istanbul date '+%Y-%m-%d %H:%M %Z')" > data/keepalive.txt
+          git config user.name "sammekBTM-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/keepalive.txt
+          git commit -m "Canlı tutma: $(date -u +%F)" || echo "değişiklik yok"
+          git push
+      - name: Zamanlanmış akışların açık olduğundan emin ol
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in update.yml keepalive.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable" && echo "$wf açık" || echo "$wf etkinleştirilemedi"
+          done

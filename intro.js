@@ -5,7 +5,7 @@
   const root = document.documentElement, ov = document.getElementById("intro");
   const STEPS = [["conn", "Borsa verisine bağlanılıyor…"], ["count", "Hisseler doğrulanıyor…"], ["live", "Canlı akışa bağlanılıyor…"], ["price", "Fiyatlar kontrol ediliyor…"], ["news", "Haberler yükleniyor…"]];
   const res = {}, shown = {};
-  if (!root.classList.contains("intro-on") || !ov) { window.INTRO = {set() {}, fail() {}}; return; }
+  if (!root.classList.contains("intro-on") || !ov) { window.INTRO = {set() {}, fail() {}}; window.SBTM_INTRO_DONE = true; return; }
   const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const T0 = performance.now(), VERIFY_AT = 1650, GAP = 430, CAP = 9000;
   const $i = id => document.getElementById(id);
@@ -55,7 +55,7 @@
       if (an) an.onfinish = fin; else fin();
     }
     const o = A(ov, [{opacity: 1}, {opacity: 0}], {duration: D * .9, easing: "ease-in"});
-    const end = () => { root.classList.remove("intro-on"); ov.remove(); stagger(); };
+    const end = () => { if (!document.getElementById("intro")) return; root.classList.remove("intro-on"); ov.remove(); stagger(); window.SBTM_INTRO_DONE = true; dispatchEvent(new Event("sbtm:introdone")); };
     if (o) o.onfinish = end; else end();
     setTimeout(() => { if (document.getElementById("intro")) end(); }, D + 400);
   }

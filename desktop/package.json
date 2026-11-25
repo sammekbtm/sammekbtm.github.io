@@ -1,0 +1,32 @@
+{
+  "name": "sammekbtm",
+  "productName": "sammekBTM",
+  "version": "1.0.0",
+  "description": "sammekBTM · Borsa Takip Merkezi masaüstü uygulaması",
+  "author": "sammekBTM",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": { "start": "electron .", "dist": "electron-builder --win nsis --x64 --publish never" },
+  "devDependencies": { "electron": "^33.2.0", "electron-builder": "^25.1.8" },
+  "build": {
+    "appId": "io.github.sammekbtm.app",
+    "productName": "sammekBTM",
+    "copyright": "sammekBTM",
+    "files": ["main.js", "offline.html", "icon.png", "icon.ico"],
+    "directories": { "output": "dist" },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "icon.ico" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "sammekBTM",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "sammekBTM-Kurulum.exe",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico"
+    },
+    "compression": "maximum"
+  }
+}

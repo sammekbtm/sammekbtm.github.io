@@ -1,0 +1,9 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>sammekBTM</title>
+<style>html,body{margin:0;height:100%;background:radial-gradient(ellipse at 50% 40%,#0c2034,#050b13 60%,#020407);color:#d7dee7;font:16px "Segoe UI",Arial,sans-serif}
+.c{height:100%;display:grid;place-items:center;text-align:center}img{width:150px;filter:drop-shadow(0 0 18px rgba(47,129,247,.7))}
+h1{letter-spacing:.3em;margin:10px 0 4px}p{color:#9aa8b7;max-width:420px}button{margin-top:14px;padding:12px 26px;border:0;border-radius:10px;font:700 15px inherit;background:linear-gradient(135deg,#ffd34d,#f5b301);cursor:pointer}</style></head>
+<body><div class="c"><div><img src="icon.png" alt=""><h1>SAMMEKBTM</h1><h3>📴 İnternet bağlantısı yok</h3>
+<p>sammekBTM güncel borsa verilerini internetten alır. Bağlantın gelince otomatik olarak açılacak.</p>
+<button onclick="go()">Tekrar dene</button><p id="s" style="font-size:13px"></p></div></div>
+<script>function go(){location.href="https://sammekbtm.github.io/?source=desktop"}
+let n=10;setInterval(()=>{if(navigator.onLine){document.getElementById("s").textContent="Bağlantı bulundu, açılıyor…";go()}else{document.getElementById("s").textContent="Bağlantı bekleniyor…"}},4000);</script></body></html>

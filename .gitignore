@@ -8,3 +8,5 @@ isy.html
 __pycache__/
 tools/kaynak_logo.png
 data/i/
+desktop/node_modules/
+desktop/dist/
