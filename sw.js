@@ -1,6 +1,6 @@
 /* sammekBTM service worker: kabuk önbelleği + veriler için "önce ağ" (her zaman güncel), çevrimdışıysa son kayıtlı veri. */
-const V = "sbtm-v1";
-const SHELL = ["./", "index.html", "style.css", "app.js", "btm.js", "intro.js", "install.js", "manifest.json",
+const V = "sbtm-v2";
+const SHELL = ["./", "index.html", "style.css", "engine.js", "app.js", "btm.js", "intro.js", "install.js", "manifest.json",
   "assets/shark.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/favicon.png", "data/tickers.json", "data/quotes.json"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => Promise.all(SHELL.map(u => c.add(new Request(u, {cache: "reload"})).catch(() => {})))).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

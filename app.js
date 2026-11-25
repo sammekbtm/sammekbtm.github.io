@@ -126,6 +126,7 @@ async function poll() {
       if (openCode) renderDetailHead(openCode, true);
     }
   } catch (e) { console.warn(e); }
+  if (openCode && H) { const c = openCode; loadLV(c).then(() => { if (openCode === c) renderOrders(); }); }
   setTimeout(poll, 60000);
 }
 const pick = o => ({p: o.p, c: o.c, cp: o.cp, v: o.v, h: o.h, l: o.l, tv: o.tv, lt: o.lt});
@@ -175,7 +176,7 @@ async function openDetail(c) {
   $("#dbody").innerHTML = `<div id="dhead"></div><div id="dorders"><div class="orders"><div class="loading">Alış / satış önerisi hesaplanıyor…</div></div></div><div id="dwhy"></div><div id="dchart" class="chartbox"><div class="loading">Grafik yükleniyor…</div></div><div id="dstats"></div><div id="dozet"></div><div id="dnews" class="news"><div class="loading">Haberler yükleniyor…</div></div>`;
   setTimeout(() => $("#back")?.focus({preventScroll: true}), 30);
   renderDetailHead(c);
-  const [h, n, i] = await Promise.all([getJSON(`data/h/${c}.json`).catch(() => null), getJSON(`data/n/${c}.json`).catch(() => null), getJSON(`data/i/${c}.json`).catch(() => null)]);
+  const [h, n, i] = await Promise.all([getJSON(`data/h/${c}.json`).catch(() => null), getJSON(`data/n/${c}.json`).catch(() => null), getJSON(`data/i/${c}.json`).catch(() => null), loadLV(c)]);
   if (openCode !== c) return; H = h; NEWS = n ? n.n : []; INTRA = i;
   renderWhy(); renderChart(); renderOrders(); renderOzet(); renderNews();
 }
@@ -427,44 +428,58 @@ function renderWhy() {
 /* ---------------- önerilen emir seviyeleri ---------------- */
 function tickSize(p) { return p < 20 ? 0.01 : p < 50 ? 0.02 : p < 100 ? 0.05 : p < 250 ? 0.1 : p < 500 ? 0.25 : p < 1000 ? 0.5 : p < 2500 ? 1 : 2.5; }
 const roundT = (x, mode) => { const t = tickSize(x); const f = mode === "down" ? Math.floor : mode === "up" ? Math.ceil : Math.round; return +(f(x / t + 1e-9) * t).toFixed(t < 0.1 ? 2 : t < 1 ? 2 : 1); };
+/* ---- Önerilen emir fiyatları: engine.js + günlük sabit seviyeler (data/lv) ---- */
+let LVM = null; const LVC = {};
+const istDay = () => new Date().toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"});
+async function loadLV(c) { try { const [m, l] = await Promise.all([getJSON("data/lv/_meta.json").catch(() => LVM), getJSON(`data/lv/${c}.json`)]); LVM = m; LVC[c] = l; } catch (e) { delete LVC[c]; } }
+function getLevels(code, HH = H) {
+  const E = window.ENGINE; if (!E) return null; const L = LVC[code];
+  if (L && L.date === istDay() && L.nb) return L; // gün boyu sabit seviye
+  if (!HH || !HH.c || HH.c.length < 30) return null;
+  const ctx = E.buildCtx(E.completed(HH, istDay())); if (!ctx) return null;
+  const ns = E.newsScore(code === openCode ? NEWS : [], Date.now() / 1000), P = E.plan(ctx, ns, {br: LVM?.br ?? null});
+  return {...P, ns, mv: E.moveRange(ctx, ns.s), nn: ns, nmv: E.moveRange(ctx, ns.s), nchg: false, inst: true};
+}
+// btm.js uyumluluğu için eski arayüz
 function orderLevels(code, HH = H) {
-  const q = Q[code]; if (!HH || !q?.p || HH.c.length < 30) return null;
-  let {c, h, l, t} = HH; c = c.slice(); h = h.map((x, i) => x ?? c[i]); l = l.map((x, i) => x ?? c[i]);
-  const today = new Date().toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"});
-  if (new Date(t[t.length - 1] * 1000).toLocaleDateString("en-CA", {timeZone: "Europe/Istanbul"}) === today) { c.pop(); h.pop(); l.pop(); }
-  const p = q.p, n = c.length; let trs = [];
-  for (let i = Math.max(1, n - 14); i < n; i++) trs.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
-  const atr = trs.reduce((a, b) => a + b, 0) / trs.length; if (!atr) return null;
-  const avg = k => n >= k ? c.slice(-k).reduce((a, b) => a + b, 0) / k : null;
-  const S = [], Rr = [];
-  const add = (arr, v, name) => { if (v != null && isFinite(v)) arr.push([v, name]); };
-  add(S, Math.min(...l.slice(-20)), "20 günlük dip"); add(Rr, Math.max(...h.slice(-20)), "20 günlük tepe");
-  if (n >= 50) { add(S, Math.min(...l.slice(-50)), "50 günlük dip"); add(Rr, Math.max(...h.slice(-50)), "50 günlük tepe"); }
-  for (const [v, nm] of [[avg(20), "20 günlük ortalama"], [avg(50), "50 günlük ortalama"]]) if (v) (v < p ? S : Rr).push([v, nm]);
-  for (let i = Math.max(3, n - 60); i < n - 3; i++) {
-    const wl = l.slice(i - 3, i + 4), wh = h.slice(i - 3, i + 4);
-    if (l[i] === Math.min(...wl)) add(S, l[i], "son dip (swing low)");
-    if (h[i] === Math.max(...wh)) add(Rr, h[i], "son tepe (swing high)");
-  }
-  const sup = S.filter(([v]) => v < p - 0.3 * atr && v >= p - 2.5 * atr).sort((a, b) => b[0] - a[0])[0];
-  const res = Rr.filter(([v]) => v > p + 0.3 * atr && v <= p + 3 * atr).sort((a, b) => a[0] - b[0])[0];
-  let buy = sup ? sup[0] + 0.1 * atr : p - atr, sell = res ? res[0] - 0.1 * atr : p + 1.5 * atr;
-  buy = roundT(Math.min(buy, p - tickSize(p)), "down"); sell = roundT(Math.max(sell, p + tickSize(p)), "up");
-  const stop = roundT(buy - atr, "down");
-  return {p, buy, sell, stop, atr, rr: (sell - buy) / Math.max(1e-9, buy - stop),
-    why: `Alış: ${sup ? `${sup[1]} (${fp(sup[0])}) desteğinin hemen üstü` : "yakında destek yok → fiyat − 1 ATR"} · Satış: ${res ? `${res[1]} (${fp(res[0])}) direncinin hemen altı` : "yakında direnç yok → fiyat + 1,5 ATR"} · Stop: alış − 1 ATR (ATR14 = ${fp(atr)})`};
+  const L = getLevels(code, HH), q = Q[code]; if (!L || !q?.p) return null;
+  return {p: q.p, buy: L.nb.p, sell: L.t1.p, stop: L.st, atr: L.atr, rr: L.rr, why: L.nb.w};
 }
 function renderOrders() {
-  const el = $("#dorders"); if (!el) return; const o = orderLevels(openCode);
-  if (!o) { el.innerHTML = H ? `<div class="orders"><div class="loading">Bu hisse için yeterli geçmiş veri yok; alış/satış önerisi hesaplanamadı.</div></div>` : el.innerHTML; return; }
-  const pd = x => "%" + F1.format(Math.abs((x / o.p - 1) * 100)), when = LIVE_AT && Date.now() - LIVE_AT < 90000 ? new Date(LIVE_AT).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul"}) : trTime(META.u);
-  const wasOpen = el.querySelector("details")?.open;
-  el.innerHTML = `<div class="orders"><h2>ÖNERİLEN EMİR FİYATLARI <small>şu anki fiyat ${fp(o.p)} ₺ · güncellendi ${when} · otomatik yenilenir</small></h2>
-    <div class="ogrid plan">
-    <div class="ob buy"><span>ALMAK İÇİN UYGUN FİYAT</span><b>${fp(o.buy)} ₺</b><small>şu anki fiyatın ${pd(o.buy)} altı · bu fiyattan <b>alış emri</b> girilebilir</small></div>
-    <div class="ob sell"><span>SATMAK İÇİN HEDEF FİYAT</span><b>${fp(o.sell)} ₺</b><small>şu anki fiyatın ${pd(o.sell)} üstü · bu fiyattan <b>satış emri</b> girilebilir</small></div>
-    <div class="ob stop"><span>ZARAR-KES (STOP)</span><b>${fp(o.stop)} ₺</b><small>fiyat buraya düşerse zararı büyütmemek için satılır</small></div></div>
-    <details class="ologic"${wasOpen ? " open" : ""}><summary>Bu fiyatlar nasıl hesaplandı?</summary>${esc(o.why)} · Kazanç/risk oranı ${F1.format(o.rr)} <span class="flat">(ATR: bir günde ortalama ne kadar oynadığı)</span></details>
-    <div class="disc">⚠ Destek/direnç, son dip/tepe, hareketli ortalamalar ve günlük oynaklıktan kurallarla otomatik hesaplanır. Yatırım tavsiyesi değildir.</div></div>`;
+  const el = $("#dorders"); if (!el) return; const L = getLevels(openCode), q = Q[openCode];
+  if (!L || !q?.p) { el.innerHTML = H ? `<div class="orders"><div class="loading">Bu hisse için yeterli geçmiş veri yok; alış/satış önerisi hesaplanamadı.</div></div>` : el.innerHTML; return; }
+  const p = q.p, pc = x => { const v = (x / p - 1) * 100; return (v > 0 ? "+" : v < 0 ? "−" : "") + "%" + F1.format(Math.abs(v)); };
+  const when = LIVE_AT && Date.now() - LIVE_AT < 90000 ? new Date(LIVE_AT).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul"}) : trTime(META.u);
+  const wasOpen = el.querySelector("details")?.open, regC = /up|breakout/.test(L.reg) ? "up" : /down/.test(L.reg) ? "down" : "flat";
+  let st = "";
+  if (p <= L.st) st = `<div class="ostate bad">⛔ Fiyat (${fp(p)}) stop seviyesinin altında: bugünkü plan geçersiz. Yeni seviyeler bir sonraki işlem gününde kurulur.</div>`;
+  else if (p >= L.t1.p) st = `<div class="ostate ok">✅ Fiyat Hedef 1'e (${fp(L.t1.p)}) ulaştı / üstünde — kovalamak yerine yeni günün seviyelerini bekleyin.</div>`;
+  else if (p <= L.nb.p) st = `<div class="ostate ok">🟢 Fiyat yakın alış seviyesine geldi (${fp(L.nb.p)} ve altı).</div>`;
+  if (L.ne) st += `<div class="ostate warn">✋ Şu an uygun giriş yok: kazanç/risk oranı 1,5'in altında. ${L.db ? "Güçlü destek alışını bekleyin." : "Yeni seviye oluşmasını bekleyin."}</div>`;
+  const risk = (L.nb.p - L.st) / L.nb.p * 100;
+  const card = (cls, title, price, lines) => `<div class="ob ${cls}"><span>${title}</span><b>${price == null ? "—" : fp(price) + " ₺"}</b>${lines.map(x => `<small>${x}</small>`).join("")}</div>`;
+  const nn = L.nn || L.ns || {s: 0, n: 0, top: []}, nmv = L.nmv || L.mv || [0, 0];
+  const nlab = nn.s >= 1 ? ["olumlu", "up"] : nn.s >= 0.3 ? ["hafif olumlu", "up"] : nn.s <= -1 ? ["olumsuz", "down"] : nn.s <= -0.3 ? ["hafif olumsuz", "down"] : ["nötr", "flat"];
+  const setTxt = L.inst ? "Günlük seviye dosyası henüz hazır değil → seviyeler şu an tarayıcıda anlık hesaplandı" :
+    `Seviyeler ${new Date(L.setAt * 1000).toLocaleDateString("tr-TR", {timeZone: "Europe/Istanbul"})} ${new Date(L.setAt * 1000).toLocaleTimeString("tr-TR", {timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit"})}'te belirlendi · gün boyu sabit, yeni işlem gününde yenilenir${LVM?.late && LVM.date === L.date ? " (bugün geç kuruldu; yalnızca tamamlanmış günlerin verisi kullanıldı)" : ""}`;
+  el.innerHTML = `<div class="orders"><h2>ÖNERİLEN EMİR FİYATLARI <small>şu anki fiyat ${fp(p)} ₺ · güncellendi ${when} · <b class="${regC}">${esc(L.rl)}</b> · güven %${L.conf}</small></h2>
+    <div class="oset">🕘 ${setTxt}</div>${st}
+    <div class="ogrid plan2">
+    ${card("buy", "YAKIN ALIŞ", L.nb.p, [`şu anki fiyata göre <b>${pc(L.nb.p)}</b> · dolma ihtimali ~%${L.nb.f}`, esc(L.nb.w)])}
+    ${card("buy deep", "GÜÇLÜ DESTEK ALIŞI", L.db ? L.db.p : null, L.db ? [`<b>${pc(L.db.p)}</b> · dolma ihtimali ~%${L.db.f}`, esc(L.db.w), `bu alış için stop ${fp(L.sd)} (${pc(L.sd)})`] : ["Yakında güçlü (çok kez test edilmiş) destek yok."])}
+    ${card("sell", "HEDEF 1", L.t1.p, [`<b>${pc(L.t1.p)}</b> · 5 günde ulaşma ~%${L.t1.r5} · K/R ${F1.format(L.rr)}`, esc(L.t1.w)])}
+    ${card("sell", "HEDEF 2", L.t2 ? L.t2.p : null, L.t2 ? [`<b>${pc(L.t2.p)}</b> · 5 günde ulaşma ~%${L.t2.r5} · K/R ${F1.format(L.rr2)}`, esc(L.t2.w)] : ["Üstte ikinci puanlı direnç yok."])}
+    ${card("stop", "ZARAR-KES (STOP)", L.st, [`<b>${pc(L.st)}</b> · yakın alıştan risk %${F1.format(risk)}`, "Kullanılan desteğin altı − oynaklık tamponu"])}
+    </div>
+    ${L.notes?.length ? `<ul class="onotes">${L.notes.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    <div class="onews"><b>📰 Haber etkisi (canlı)</b> <span class="${nlab[1]}">${nlab[0]}</span> <span class="flat">puan ${nn.s > 0 ? "+" : ""}${F1.format(nn.s)} · son 7 günde ${nn.n} ilgili haber</span>
+      · olası 5 günlük hareket <b>tahmini</b>: <span class="down">−%${F1.format(Math.abs(nmv[0]))}</span> / <span class="up">+%${F1.format(nmv[1])}</span> <span class="flat">(hissenin kendi oynaklığından; kesin değil)</span>
+      ${nn.top?.length ? `<div class="flat">${nn.top.map(x => `${x[1] > 0 ? "▲" : "▼"} ${esc(x[0])}`).join("<br>")}</div>` : ""}
+      ${L.nchg ? `<div class="ostate warn">Seviyeler belirlendikten sonra haber akışı değişti${L.nfresh ? ` (${L.nfresh} yeni haber)` : ""}. Seviyeler gün boyu sabit kalır; yeni haberi ayrıca değerlendirin.</div>` : ""}</div>
+    <details class="ologic"${wasOpen ? " open" : ""}><summary>Bu fiyatlar nasıl hesaplandı?</summary>
+      Destek ve dirençler; son 120 günün dip/tepeleri, 20/50/200 günlük ortalamalar, pivot seviyeleri, dünün dip/tepesi, 20/50 günlük ve 52 haftalık dip/tepe ile en çok hacim gören fiyat bölgelerinden toplanır. Birbirine yakın olanlar birleştirilip kaç kez tepki gördüğüne, ne kadar yeni olduğuna ve hacme göre puanlanır. Eğilim (rejim) ortalamaların eğimi ve ADX ile belirlenir.
+      Yakın alış, fiyata yakın en iyi puanlı desteğin hemen üstüdür; dolma ihtimali son 60 günde günün en düşüğünün o kadar aşağı inme sıklığıdır. Stop, kullanılan desteğin altındaki bir sonraki destek − oynaklık tamponudur. Hedefler sıradaki puanlı dirençlerin hemen altıdır. Fiyatlar BIST fiyat adımına yuvarlanır. Olumlu haber alışı yaklaştırır ve hedefi bir üst dirence taşır; olumsuz haber alışı derinleştirir, hedefi ve stopu sıkılaştırır.
+      <div class="flat" style="margin-top:6px">Geçmiş test (Kasım 2026; en likit 20 hisse, son 60 işlem günü, haber ayarı olmadan): yakın alış ertesi gün %41 oranında doldu (motorun öngördüğü ~%37). Dolan işlemlerin 10 gün içinde %20'sinde önce Hedef 1, %67'sinde önce stop geldi. Bu dönemde bu hisseler ortalama %23 düştü; düşen piyasada alış planları çoğunlukla stopla biter. ATR: hissenin bir günde ortalama ne kadar oynadığı (${fp(L.atr)} ₺).</div></details>
+    <div class="disc">⚠ Kurallarla otomatik hesaplanır, uydurma veri yoktur; fiyatlar ~15 dk gecikmelidir. Yatırım tavsiyesi değildir.</div></div>`;
 }
 
